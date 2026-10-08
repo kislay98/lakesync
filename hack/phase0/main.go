@@ -707,6 +707,11 @@ func main() {
 	case "q":
 		db := duck(ctx)
 		defer db.Close()
+		if len(os.Args) > 3 {
+			if _, err := db.ExecContext(ctx, os.Args[3]); err != nil {
+				fmt.Println("pre-statement error:", err)
+			}
+		}
 		rows, err := db.QueryContext(ctx, os.Args[2])
 		must(err, "query")
 		defer rows.Close()
