@@ -1,0 +1,27 @@
+# binaries and build output
+/bin/
+/dist/
+hack/phase0/phase0
+*.test
+*.out
+coverage.*
+
+# node
+node_modules/
+web/dist/
+web/playwright-report/
+web/test-results/
+
+# embedded UI build output (built by `make ui`, committed images only)
+internal/api/static/*
+!internal/api/static/.gitkeep
+
+# env
+.env
+.env.local
+*.local.yml
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,125 @@
+# Local development stack for lakesync.
+#
+#   make up        -> starts everything including the lakesync app
+#   make dev       -> starts only the infrastructure (profile "infra") for live-reload development
+#
+# Hostnames inside the compose network: mongodb, s3, nessie, postgres, lakesync.
+# From the host: localhost:27017, :9000 (S3 API), :9001 (S3 console), :19120 (Nessie), :5432, :8080.
+
+name: lakesync
+
+services:
+  mongodb:
+    image: mongo:8.0
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+    healthcheck:
+      # Initialises the single-node replica set on first boot, then reports healthy once PRIMARY.
+      test: >-
+        mongosh --quiet --eval "
+          try { const s = rs.status(); if (s.myState === 1) quit(0); quit(1) }
+          catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'mongodb:27017'}]}); quit(1) }"
+      interval: 3s
+      timeout: 10s
+      retries: 30
+      start_period: 5s
+
+  # S3-compatible object storage. RustFS is a MinIO-compatible drop-in; MinIO's own images
+  # were withdrawn from public registries in 2026 (see DECISIONS.md).
+  s3:
+    image: rustfs/rustfs:latest
+    environment:
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY:-lakesync}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_KEY:-lakesync-secret}
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - s3-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/health/live || curl -sf http://localhost:9000/ -o /dev/null -w '%{http_code}' | grep -qE '^(200|403)$'"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+      start_period: 3s
+
+  # One-shot job that creates the warehouse bucket.
+  s3-init:
+    image: amazon/aws-cli:latest
+    depends_on:
+      s3:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-lakesync}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-lakesync-secret}
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_EC2_METADATA_DISABLED: "true"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        aws --endpoint-url http://s3:9000 s3api head-bucket --bucket ${S3_BUCKET:-warehouse} 2>/dev/null
+        || aws --endpoint-url http://s3:9000 s3 mb s3://${S3_BUCKET:-warehouse}
+
+  nessie:
+    image: ghcr.io/projectnessie/nessie:0.109.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      s3-init:
+        condition: service_completed_successfully
+    ports:
+      - "19120:19120"
+    environment:
+      # Version store in Postgres so catalog state survives restarts.
+      NESSIE_VERSION_STORE_TYPE: JDBC2
+      NESSIE_VERSION_STORE_PERSIST_JDBC_DATASOURCE: postgresql
+      QUARKUS_DATASOURCE_POSTGRESQL_JDBC_URL: jdbc:postgresql://postgres:5432/nessie
+      QUARKUS_DATASOURCE_POSTGRESQL_USERNAME: ${POSTGRES_USER:-lakesync}
+      QUARKUS_DATASOURCE_POSTGRESQL_PASSWORD: ${POSTGRES_PASSWORD:-lakesync}
+      # Iceberg REST catalog: one warehouse on the S3 bucket.
+      NESSIE_CATALOG_DEFAULT_WAREHOUSE: warehouse
+      NESSIE_CATALOG_WAREHOUSES_WAREHOUSE_LOCATION: s3://${S3_BUCKET:-warehouse}/
+      NESSIE_CATALOG_SERVICE_S3_DEFAULT_OPTIONS_ENDPOINT: http://s3:9000/
+      # Endpoint handed to clients that rely on catalog-vended storage config (tools run on the host).
+      # lakesync itself always uses the S3 endpoint entered in the UI, so inside Docker it uses http://s3:9000.
+      NESSIE_CATALOG_SERVICE_S3_DEFAULT_OPTIONS_EXTERNAL_ENDPOINT: ${S3_EXTERNAL_ENDPOINT:-http://localhost:9000/}
+      NESSIE_CATALOG_SERVICE_S3_DEFAULT_OPTIONS_PATH_STYLE_ACCESS: "true"
+      NESSIE_CATALOG_SERVICE_S3_DEFAULT_OPTIONS_REGION: us-east-1
+      NESSIE_CATALOG_SERVICE_S3_DEFAULT_OPTIONS_AUTH_TYPE: STATIC
+      NESSIE_CATALOG_SERVICE_S3_DEFAULT_OPTIONS_ACCESS_KEY: urn:nessie-secret:quarkus:nessie-catalog-secrets.s3-access-key
+      # Quarkus resolves this secret from the dotted property names, so they are passed literally.
+      nessie-catalog-secrets.s3-access-key.name: ${S3_ACCESS_KEY:-lakesync}
+      nessie-catalog-secrets.s3-access-key.secret: ${S3_SECRET_KEY:-lakesync-secret}
+    healthcheck:
+      # Quarkus management port 9000 (inside the container) serves the health endpoints.
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/q/health/ready >/dev/null"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+      start_period: 10s
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lakesync}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lakesync}
+      POSTGRES_DB: lakesync
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/10-nessie.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lakesync} -d lakesync"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  mongodb-data:
+  s3-data:
+  postgres-data:
