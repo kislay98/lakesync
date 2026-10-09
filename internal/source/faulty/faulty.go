@@ -1,7 +1,9 @@
 // Package faulty wraps another source type and injects failures on demand. It
 // exists for the end-to-end tests (brief section 15: "inject a history-lost
-// error through a fault-injection wrapper around the Source") and is only
-// registered when LAKESYNC_ENABLE_FAULT_INJECTION=true.
+// error through a fault-injection wrapper around the Source"). The type is
+// always registered so that tools such as verify can open pipelines that use
+// it, but it is hidden from the UI unless LAKESYNC_ENABLE_FAULT_INJECTION=true,
+// and it never injects anything unless LAKESYNC_FAULT_DIR is set.
 //
 // Faults are requested by creating files in LAKESYNC_FAULT_DIR:
 //
@@ -31,10 +33,9 @@ const (
 )
 
 func init() {
-	if !strings.EqualFold(os.Getenv(EnvEnable), "true") {
-		return
-	}
+	enabled := strings.EqualFold(os.Getenv(EnvEnable), "true")
 	source.Register(source.Descriptor{
+		Hidden:      !enabled,
 		Type:        TypeName,
 		Title:       "MongoDB (fault injection, tests only)",
 		Description: "The MongoDB source wrapped with on-demand failures for end-to-end tests.",

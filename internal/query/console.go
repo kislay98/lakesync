@@ -135,6 +135,8 @@ func (e *Engine) Query(ctx context.Context, alias, sqlText string, rowLimit int,
 			if _, err := conn.ExecContext(ctx, "SET search_path = "+quoteString(strings.Join(parts, ","))); err != nil {
 				return nil, fmt.Errorf("cannot set the search path: %s", friendlyErr(err))
 			}
+			// the connection goes back to the pool: leave no catalog references behind
+			defer func() { _, _ = conn.ExecContext(context.WithoutCancel(ctx), "RESET search_path") }()
 		}
 	}
 	wrapped := s

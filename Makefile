@@ -7,7 +7,7 @@ LDFLAGS := -X lakesync/internal/config.Version=$(VERSION) -X lakesync/internal/c
 COMPOSE := docker compose -f deploy/local/docker-compose.yml
 export PATH := /opt/homebrew/bin:$(PATH)
 
-.PHONY: help up down logs dev build ui test test-integration e2e lint seed verify clean docker screenshots
+.PHONY: help up down reset logs infra dev build ui test test-unit e2e e2e-container e2e-inner bench bench-container lint seed seed-host verify verify-host clean docker screenshots
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -54,15 +54,38 @@ lint: ## golangci-lint (includes the cloud-neutral depguard check) and UI lint
 	golangci-lint run ./...
 	cd web && npm run lint
 
-e2e: ## Correctness, resync, source-removed and UI suites (needs `make infra`; builds the binary)
+e2e: ## Correctness, resync, source-removed, split-process, security and UI suites (needs `make infra`; builds the binary)
 	$(MAKE) build
 	go test -tags e2e ./test/e2e/... -count=1 -timeout 60m -v
-	cd web && npx playwright test
+	./scripts/ui-e2e.sh
 
-seed: ## Generate test data in the local MongoDB (initial load + 5 minutes of changes)
+e2e-container: ## Same suites, run from a container inside the compose network (no host port forwarding involved)
+	$(COMPOSE) -f deploy/local/docker-compose.e2e.yml build e2e
+	$(COMPOSE) -f deploy/local/docker-compose.e2e.yml run --rm e2e
+
+e2e-inner: ## (used inside the e2e container) build a Linux binary, run the Go and UI suites
+	go build -ldflags "$(LDFLAGS)" -o bin/lakesync-linux ./cmd/$(APP)
+	go test -tags e2e ./test/e2e/... -count=1 -timeout 90m -v
+	cd web && npm ci --no-audit --no-fund >/dev/null && cd .. && ./scripts/ui-e2e.sh
+
+bench: ## Benchmarks for docs/BENCHMARKS.md (needs `make infra` and `make build`; LAKESYNC_BENCH_DOCS sets the table size)
+	LAKESYNC_BENCH=1 go test -tags e2e ./test/e2e/ -run TestBenchmark -count=1 -timeout 4h -v
+
+bench-container: ## Benchmarks from inside the compose network
+	$(COMPOSE) -f deploy/local/docker-compose.e2e.yml build e2e
+	LAKESYNC_BENCH=1 $(COMPOSE) -f deploy/local/docker-compose.e2e.yml run --rm e2e sh -c 'go build -o bin/lakesync-linux ./cmd/lakesync && go test -tags e2e ./test/e2e/ -run TestBenchmark -count=1 -timeout 4h -v'
+
+
+seed: ## Generate test data in the local MongoDB through the app container (initial load + 5 minutes of changes)
+	$(COMPOSE) --profile app run --rm --no-deps lakesync seed --uri "mongodb://mongodb:27017/?replicaSet=rs0" --duration 5m --new-field-after 1m --type-conflict-after 2m
+
+seed-host: ## Same, but with a locally built binary against localhost:27017 (needs Go)
 	go run ./cmd/$(APP) seed --duration 5m --new-field-after 1m --type-conflict-after 2m
 
-verify: ## Compare every pipeline's collections with their clean tables
+verify: ## Compare every pipeline's collections with their clean tables (through the app container)
+	$(COMPOSE) --profile app run --rm --no-deps lakesync verify
+
+verify-host: ## Same with a local binary and deploy/local/dev.env (needs Go)
 	@set -a && source deploy/local/dev.env && set +a && go run ./cmd/$(APP) verify
 
 docker: ## Build the multi-arch image locally (loads the host arch)

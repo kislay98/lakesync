@@ -1,5 +1,6 @@
 .git
-bin
+bin/lakesync
+bin/lakesync-linux
 web/node_modules
 web/dist
 web/playwright-report

@@ -33,6 +33,9 @@ type typeInfo struct {
 func (s *Server) types(w http.ResponseWriter, r *http.Request) {
 	var sources, dests []typeInfo
 	for _, d := range source.Types() {
+		if d.Hidden {
+			continue
+		}
 		sources = append(sources, typeInfo{Type: d.Type, Kind: "source", Title: d.Title, Description: d.Description, Schema: d.Schema, CanParse: d.Parse != nil})
 	}
 	for _, d := range dest.Types() {

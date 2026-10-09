@@ -11,7 +11,20 @@ name: lakesync
 services:
   mongodb:
     image: mongo:8.0
-    command: ["--replSet", "rs0", "--bind_ip_all"]
+    restart: unless-stopped
+    # mongod runs under a tiny supervisor loop so that a server shutdown (the end-to-end
+    # tests use `db.adminCommand({shutdown: 1})` to simulate a MongoDB restart) restarts the
+    # server without restarting the container; the container itself still stops cleanly.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        trap 'kill -TERM $$MPID 2>/dev/null; wait $$MPID; exit 0' TERM INT
+        while true; do
+          docker-entrypoint.sh mongod --replSet rs0 --bind_ip_all & MPID=$$!
+          wait $$MPID
+          echo "mongod exited; restarting in 1s"
+          sleep 1
+        done
     ports:
       - "27017:27017"
     volumes:
@@ -31,6 +44,7 @@ services:
   # were withdrawn from public registries in 2026 (see DECISIONS.md).
   s3:
     image: rustfs/rustfs:latest
+    restart: unless-stopped
     environment:
       RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY:-lakesync}
       RUSTFS_SECRET_KEY: ${S3_SECRET_KEY:-lakesync-secret}
@@ -66,6 +80,7 @@ services:
 
   nessie:
     image: ghcr.io/projectnessie/nessie:0.109.0
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
@@ -104,6 +119,7 @@ services:
 
   postgres:
     image: postgres:17-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-lakesync}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lakesync}

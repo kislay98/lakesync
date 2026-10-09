@@ -1,0 +1,15 @@
+# Image that runs the end-to-end suites from inside the compose network, so the
+# tests talk to MongoDB, Postgres, Nessie and S3 over Docker's bridge rather than
+# through host port forwarding. Used by `make e2e-container`.
+FROM mcr.microsoft.com/playwright:v1.64.0-noble
+ARG GO_VERSION=1.27.1
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl gnupg make git netcat-openbsd build-essential \
+ && install -m 0755 -d /etc/apt/keyrings \
+ && curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc \
+ && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" > /etc/apt/sources.list.d/docker.list \
+ && apt-get update && apt-get install -y --no-install-recommends docker-ce-cli \
+ && rm -rf /var/lib/apt/lists/* \
+ && ARCH=$(dpkg --print-architecture) && curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz" | tar -C /usr/local -xz
+ENV PATH=/usr/local/go/bin:/root/go/bin:$PATH GOFLAGS=-buildvcs=false CGO_ENABLED=1
+WORKDIR /src

@@ -66,6 +66,8 @@ type Descriptor struct {
 	// Parse (optional) turns pasted text such as a connection string into form
 	// values: non-secret config and secret fields, so the UI can fill its form.
 	Parse func(text string) (config map[string]any, secrets map[string]string, err error) `json:"-"`
+	// Hidden types are usable but not offered in the UI (test helpers).
+	Hidden bool `json:"-"`
 }
 
 var (

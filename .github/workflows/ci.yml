@@ -65,10 +65,10 @@ jobs:
         run: make ui build
       - name: Correctness, resync and source-removed suites
         run: go test -tags e2e ./test/e2e/... -count=1 -timeout 60m -v
-      - name: Playwright
+      - name: Playwright (fresh instance, first-run flow included)
         run: |
-          cd web && npx playwright install --with-deps chromium
-          npx playwright test
+          cd web && npx playwright install --with-deps chromium && cd ..
+          ./scripts/ui-e2e.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:

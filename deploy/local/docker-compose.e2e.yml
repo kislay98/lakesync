@@ -1,0 +1,44 @@
+# Overlay for running the end-to-end suites inside the compose network:
+#   docker compose -f deploy/local/docker-compose.yml -f deploy/local/docker-compose.e2e.yml run --rm e2e
+services:
+  e2e:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.e2e
+    image: lakesync-e2e:local
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      nessie:
+        condition: service_healthy
+    working_dir: /src
+    volumes:
+      - ../..:/src
+      - e2e-go-mod:/root/go/pkg/mod
+      - e2e-go-build:/root/.cache/go-build
+      - e2e-web-node-modules:/src/web/node_modules
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      LAKESYNC_E2E_BIN: /src/bin/lakesync-linux
+      LAKESYNC_BIN: /src/bin/lakesync-linux
+      LAKESYNC_E2E_PG_ADMIN: postgres://lakesync:lakesync@postgres:5432/lakesync?sslmode=disable
+      LAKESYNC_E2E_PG_HOST: postgres:5432
+      LAKESYNC_E2E_MONGODB_URI: mongodb://mongodb:27017/?replicaSet=rs0
+      SEED_MONGODB_URI: mongodb://mongodb:27017/?replicaSet=rs0
+      LAKESYNC_E2E_CATALOG_URI: http://nessie:19120/iceberg
+      LAKESYNC_E2E_S3_ENDPOINT: http://s3:9000
+      LAKESYNC_E2E_MONGO_CONTAINER: lakesync-mongodb-1
+      LAKESYNC_E2E_MINUTES: ${LAKESYNC_E2E_MINUTES:-10}
+      LAKESYNC_E2E_DOCS: ${LAKESYNC_E2E_DOCS:-50000}
+      LAKESYNC_BENCH: ${LAKESYNC_BENCH:-0}
+      LAKESYNC_BENCH_DOCS: ${LAKESYNC_BENCH_DOCS:-1000000}
+      LAKESYNC_BENCH_OUT: /src/docs/bench-raw.txt
+      CI: "1"
+    command: ["make", "e2e-inner"]
+
+volumes:
+  e2e-go-mod:
+  e2e-go-build:
+  e2e-web-node-modules:

@@ -98,6 +98,10 @@ func (e *Engine) setup(ctx context.Context) error {
 	}
 	if e.opts.MemoryLimit != "" {
 		stmts = append(stmts, fmt.Sprintf("SET memory_limit = %s", quoteString(e.opts.MemoryLimit)))
+	} else {
+		// DuckDB's default is 80% of physical RAM, too much for a process that shares
+		// the machine with the catalog and storage; cap it unless configured.
+		stmts = append(stmts, "SET memory_limit = '4GB'")
 	}
 	if e.opts.Threads > 0 {
 		stmts = append(stmts, fmt.Sprintf("SET threads = %d", e.opts.Threads))
@@ -242,7 +246,7 @@ func (e *Engine) Attach(ctx context.Context, alias string, cfg CatalogConfig) er
 		}
 		stmts = append(stmts, fmt.Sprintf("CREATE SECRET %s (%s)", s3Secret, strings.Join(parts, ", ")))
 	}
-	stmts = append(stmts, fmt.Sprintf("ATTACH %s AS %s (%s)", quoteString(cfg.Warehouse), quoteIdent(alias), strings.Join(attachOpts, ", ")))
+	stmts = append(stmts, fmt.Sprintf("ATTACH IF NOT EXISTS %s AS %s (%s)", quoteString(cfg.Warehouse), quoteIdent(alias), strings.Join(attachOpts, ", ")))
 	for _, s := range stmts {
 		if _, err := conn.ExecContext(ctx, s); err != nil {
 			return fmt.Errorf("attach %s: %w", alias, redactErr(err, cfg))
@@ -261,7 +265,9 @@ func (e *Engine) Detach(ctx context.Context, alias string) {
 }
 
 func (e *Engine) detachLocked(ctx context.Context, alias string) {
-	_, _ = e.db.ExecContext(ctx, "DETACH "+quoteIdent(alias))
+	if _, err := e.db.ExecContext(ctx, "DETACH DATABASE IF EXISTS "+quoteIdent(alias)); err != nil {
+		e.log.Warn("detach catalog", "alias", alias, "error", err)
+	}
 	_, _ = e.db.ExecContext(ctx, "DROP SECRET IF EXISTS "+alias+"_catalog")
 	_, _ = e.db.ExecContext(ctx, "DROP SECRET IF EXISTS "+alias+"_storage")
 	delete(e.attached, alias)

@@ -70,7 +70,7 @@ func TestCorrectness(t *testing.T) {
 		{at: total * 35 / 100, name: "pause", fn: func() { a.must("POST", "/api/pipelines/"+p.ID+"/pause", nil, nil) }},
 		{at: total * 42 / 100, name: "resume", fn: func() { a.must("POST", "/api/pipelines/"+p.ID+"/start", nil, nil) }},
 		{at: total * 55 / 100, name: "kill -9 #2", fn: func() { a.kill9(); randomSleep(1*time.Second, 3*time.Second); a.start("serve") }},
-		{at: total * 68 / 100, name: "mongodb restart", fn: func() { composeRestart(t, "mongodb") }},
+		{at: total * 68 / 100, name: "mongodb restart", fn: func() { restartMongo(t) }},
 		{at: total * 85 / 100, name: "kill -9 #3", fn: func() { a.kill9(); randomSleep(500*time.Millisecond, 2*time.Second); a.start("serve") }},
 	}
 	for _, e := range events {

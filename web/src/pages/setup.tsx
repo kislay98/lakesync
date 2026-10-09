@@ -52,13 +52,13 @@ export default function Setup() {
             <>
               <h2 className="mb-1 text-base font-semibold">Connect MongoDB</h2>
               <p className="mb-4 text-xs text-muted-foreground">Paste an Atlas connection string or enter the fields. The test proves authentication, the replica set and change-stream permissions.</p>
-              <ConnectionForm kind="source" onSaved={setSource} compact autoTest />
+              <ConnectionForm key="source" kind="source" onSaved={setSource} compact autoTest />
             </>
           ) : step === 1 ? (
             <>
               <h2 className="mb-1 text-base font-semibold">Add an Iceberg destination</h2>
               <p className="mb-4 text-xs text-muted-foreground">Any Iceberg REST catalog (Nessie, Lakekeeper, Polaris, R2 Data Catalog, Glue) with S3-compatible storage. The test writes and drops a temporary table.</p>
-              <ConnectionForm kind="destination" onSaved={setDest} compact autoTest />
+              <ConnectionForm key="destination" kind="destination" onSaved={setDest} compact autoTest />
             </>
           ) : (
             <>

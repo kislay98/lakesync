@@ -70,7 +70,7 @@ export default function Connections() {
             <DialogTitle>{dialog?.existing ? `Edit ${dialog.existing.name}` : dialog?.kind === 'source' ? 'Add a source' : 'Add a destination'}</DialogTitle>
             <DialogDescription>Test the connection before saving; the checklist explains any failure.</DialogDescription>
           </DialogHeader>
-          {dialog ? <ConnectionForm kind={dialog.kind} existing={dialog.existing} onSaved={() => setDialog(null)} onCancel={() => setDialog(null)} /> : null}
+          {dialog ? <ConnectionForm key={`${dialog.kind}:${dialog.existing?.id || "new"}`} kind={dialog.kind} existing={dialog.existing} onSaved={() => setDialog(null)} onCancel={() => setDialog(null)} /> : null}
         </DialogContent>
       </Dialog>
       <Dialog open={!!report} onOpenChange={(o) => !o && setReport(null)}>

@@ -25,6 +25,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"lakesync/internal/query"
 	"lakesync/internal/secrets"
@@ -437,23 +440,56 @@ func (a *app) runVerify(pipelineName string) (ok bool, output string) {
 	return ok, buf.String()
 }
 
-func composeRestart(t *testing.T, service string) {
+// restartMongo restarts the MongoDB server: it asks mongod to shut down and the
+// supervisor loop in the compose service brings it back. This is deliberately
+// not a container restart: republishing a container's ports can break Colima's
+// port forwarding on macOS (see DECISIONS.md). From the application's point of
+// view the event is the same: every connection drops and the server returns
+// with its oplog intact.
+func restartMongo(t *testing.T) {
 	t.Helper()
-	cmd := exec.Command("docker", "compose", "-f", composeFile, "restart", service)
+	// MongoDB only accepts `shutdown` from localhost when auth is off, so the command
+	// runs inside the container (docker exec does not touch port forwarding).
+	container := env("LAKESYNC_E2E_MONGO_CONTAINER", "lakesync-mongodb-1")
+	cmd := exec.Command("docker", "exec", container, "mongosh", "--quiet", "--eval", "try { db.adminCommand({shutdown: 1, force: true}) } catch (e) { print('shutdown sent') }")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("docker compose restart %s: %v: %s", service, err, out)
-	}
-	// wait for the healthcheck
-	for i := 0; i < 60; i++ {
-		ps := exec.Command("docker", "compose", "-f", composeFile, "ps", "--format", "{{.Service}} {{.Health}}", service)
-		o, _ := ps.CombinedOutput()
-		if strings.Contains(string(o), "healthy") {
-			return
+		// no docker on this host: ask through the driver (works when MongoDB runs with auth)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		client, cerr := mongo.Connect(options.Client().ApplyURI(mongoURI))
+		if cerr != nil {
+			t.Fatalf("docker exec failed (%v: %s) and driver connect failed: %v", err, out, cerr)
 		}
-		time.Sleep(2 * time.Second)
+		derr := client.Database("admin").RunCommand(ctx, bson.D{{Key: "shutdown", Value: 1}, {Key: "force", Value: true}}).Err()
+		_ = client.Disconnect(context.Background())
+		if derr != nil && !strings.Contains(derr.Error(), "connection") && !strings.Contains(derr.Error(), "EOF") && !strings.Contains(derr.Error(), "closed") {
+			t.Fatalf("mongod shutdown failed: docker exec: %v (%s); driver: %v", err, out, derr)
+		}
 	}
-	t.Fatalf("%s did not become healthy after restart", service)
+	if !waitMongo(120 * time.Second) {
+		t.Fatal("mongod did not come back after the shutdown; is the compose service running under the supervisor loop?")
+	}
+}
+
+// waitMongo waits until a primary answers pings again.
+func waitMongo(d time.Duration) bool {
+	deadline := time.Now().Add(d)
+	time.Sleep(2 * time.Second)
+	for time.Now().Before(deadline) {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		client, err := mongo.Connect(options.Client().ApplyURI(mongoURI).SetServerSelectionTimeout(2 * time.Second))
+		if err == nil {
+			err = client.Database("admin").RunCommand(ctx, bson.D{{Key: "hello", Value: 1}}).Err()
+			_ = client.Disconnect(context.Background())
+		}
+		cancel()
+		if err == nil {
+			return true
+		}
+		time.Sleep(time.Second)
+	}
+	return false
 }
 
 func randomSleep(min, max time.Duration) {

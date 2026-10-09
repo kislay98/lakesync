@@ -51,7 +51,9 @@ func TestSourceRemoved(t *testing.T) {
 	}
 	// keep c flowing
 	stop := make(chan struct{})
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		i := 100
 		for {
 			select {
@@ -63,7 +65,6 @@ func TestSourceRemoved(t *testing.T) {
 			}
 		}
 	}()
-	defer close(stop)
 	final := a.waitFor(p.ID, 3*time.Minute, "a and b to be marked source removed", func(p *pipeline) bool {
 		removed := 0
 		for _, c := range p.Collections {
@@ -89,7 +90,10 @@ func TestSourceRemoved(t *testing.T) {
 	if p2 := a.getPipeline(p.ID); p2.State != "source_removed" && p2.State != "streaming" {
 		t.Errorf("pipeline state %s", p2.State)
 	}
-	// a and b no longer exist at the source, so only c can be verified
+	// stop the inserter, let c catch up, then verify (a and b no longer exist at the source)
+	close(stop)
+	<-done
+	a.waitCaughtUp(p.ID, 3*time.Minute, 12*time.Second)
 	ok, out := a.runVerify("e2e-removed")
 	if !ok {
 		for _, line := range strings.Split(out, "\n") {
