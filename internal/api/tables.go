@@ -166,6 +166,8 @@ func (s *Server) listTables(w http.ResponseWriter, r *http.Request) {
 			errs = append(errs, dc.Name+": "+core.RedactURI(err.Error()))
 			continue
 		}
+		// exact counts through DuckDB for managed tables (metadata counts ignore delete files)
+		alias, attachErr := conn.Attach(ctx, s.q, s.sec, dc)
 		nss, err := insp.ListNamespaces(ctx)
 		if err != nil {
 			errs = append(errs, dc.Name+": "+core.RedactURI(err.Error()))
@@ -185,6 +187,13 @@ func (s *Server) listTables(w http.ResponseWriter, r *http.Request) {
 						v.Kind = "raw"
 					} else {
 						v.Kind = "clean"
+						if attachErr == nil {
+							cctx, ccancel := context.WithTimeout(ctx, 5*time.Second)
+							if n, err := s.q.Count(cctx, alias, ns, t.Name); err == nil {
+								v.RowCount = n
+							}
+							ccancel()
+						}
 					}
 				} else if strings.HasSuffix(t.Name, core.RawSuffix) {
 					v.Kind = "raw"

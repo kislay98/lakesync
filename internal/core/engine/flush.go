@@ -12,11 +12,12 @@ import (
 
 // batcher buffers events until a flush threshold is reached.
 type batcher struct {
-	r            *runner
-	events       []core.ChangeEvent
-	bytes        int64
-	lastSourceTS time.Time
-	skipped      int64
+	r             *runner
+	events        []core.ChangeEvent
+	bytes         int64
+	lastSourceTS  time.Time
+	firstSourceTS time.Time
+	skipped       int64
 }
 
 func newBatcher(r *runner) *batcher { return &batcher{r: r} }
@@ -29,6 +30,9 @@ func (b *batcher) add(e core.ChangeEvent) {
 	b.bytes += int64(len(e.Key)) + 64
 	if e.SourceTS.After(b.lastSourceTS) {
 		b.lastSourceTS = e.SourceTS
+	}
+	if b.firstSourceTS.IsZero() || e.SourceTS.Before(b.firstSourceTS) {
+		b.firstSourceTS = e.SourceTS
 	}
 }
 
@@ -58,6 +62,7 @@ func (b *batcher) lastBookmark() core.Bookmark {
 func (b *batcher) reset() {
 	b.events = b.events[:0]
 	b.bytes = 0
+	b.firstSourceTS = time.Time{}
 }
 
 // flush evolves the schema if needed, assigns sequence numbers, writes ONE commit
@@ -130,11 +135,13 @@ func (r *runner) flush(ctx context.Context, b *batcher, cp core.Checkpoint, merg
 	}
 	now := time.Now()
 	u := store.CollectionUpdate{LastSeq: &cp.Seq, LastCommitAt: &now}
+	r.lastCommitAt = now
 	if len(events) > 0 {
 		u.LastEventAt = &now
 		if !b.lastSourceTS.IsZero() {
 			ts := b.lastSourceTS
 			u.LastSourceTS = &ts
+			r.lastCommitSourceTS = ts
 		}
 		_ = r.w.deps.Store.AddEvents(ctx, r.p.ID, r.c.Collection, now, int64(len(events)))
 	}

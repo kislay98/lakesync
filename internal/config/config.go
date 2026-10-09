@@ -26,6 +26,7 @@ type Config struct {
 	DisableIPLookup bool
 
 	AllowPrivateEndpoints bool
+	LocalStackHints       bool // offer the local compose stack's values in connection forms
 
 	DefaultSyncIntervalS  int
 	MinSyncIntervalS      int
@@ -71,6 +72,7 @@ func Load() (*Config, error) {
 		PublicIP:              os.Getenv("PUBLIC_IP"),
 		DisableIPLookup:       envBool("DISABLE_IP_LOOKUP", false),
 		AllowPrivateEndpoints: envBool("ALLOW_PRIVATE_ENDPOINTS", true),
+		LocalStackHints:       envBool("LOCAL_STACK_HINTS", false),
 		DefaultSyncIntervalS:  envInt("DEFAULT_SYNC_INTERVAL_S", 60),
 		MinSyncIntervalS:      envInt("MIN_SYNC_INTERVAL_S", 10),
 		FlushMaxEvents:        envInt("FLUSH_MAX_EVENTS", 50000),

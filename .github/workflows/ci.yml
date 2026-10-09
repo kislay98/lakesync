@@ -1,0 +1,96 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  GO_VERSION: "1.27"
+  NODE_VERSION: "22"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: ${{ env.GO_VERSION }} }
+      - name: golangci-lint (includes the cloud-neutral depguard check)
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+          args: --timeout=10m
+      - uses: actions/setup-node@v4
+        with: { node-version: ${{ env.NODE_VERSION }}, cache: npm, cache-dependency-path: web/package-lock.json }
+      - run: cd web && npm ci --no-audit --no-fund && npm run lint && npm run build
+
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: ${{ env.GO_VERSION }} }
+      - run: go vet ./...
+      - run: go test ./... -count=1
+
+  integration:
+    runs-on: ubuntu-latest
+    needs: [unit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: ${{ env.GO_VERSION }} }
+      - name: Start the local stack
+        run: docker compose -f deploy/local/docker-compose.yml up -d --wait
+      - name: Integration tests
+        run: go test -tags integration ./... -count=1 -timeout 20m
+      - name: Stack logs on failure
+        if: failure()
+        run: docker compose -f deploy/local/docker-compose.yml logs --tail 200
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: [unit]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: ${{ env.GO_VERSION }} }
+      - uses: actions/setup-node@v4
+        with: { node-version: ${{ env.NODE_VERSION }}, cache: npm, cache-dependency-path: web/package-lock.json }
+      - name: Start the local stack
+        run: docker compose -f deploy/local/docker-compose.yml up -d --wait
+      - name: Build UI and binary
+        run: make ui build
+      - name: Correctness, resync and source-removed suites
+        run: go test -tags e2e ./test/e2e/... -count=1 -timeout 60m -v
+      - name: Playwright
+        run: |
+          cd web && npx playwright install --with-deps chromium
+          npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: |
+            web/playwright-report
+            docs/screenshots
+          if-no-files-found: ignore
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: [lint, unit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Build multi-arch image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: false
+          build-args: |
+            VERSION=${{ github.sha }}
+            COMMIT=${{ github.sha }}

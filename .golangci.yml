@@ -1,0 +1,48 @@
+version: "2"
+run:
+  timeout: 10m
+  build-tags: [integration, e2e]
+linters:
+  enable:
+    - depguard
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+  settings:
+    depguard:
+      rules:
+        cloud-neutral-core:
+          # The core, sources, destinations and query layers reach cloud services only
+          # through standard interfaces (S3 API, Iceberg REST). No provider SDKs.
+          files:
+            - "**/internal/core/**"
+            - "**/internal/source/**"
+            - "**/internal/dest/**"
+            - "**/internal/query/**"
+          deny:
+            - pkg: "github.com/aws/"
+              desc: "no AWS SDK in the cloud-neutral core (storage is reached through iceberg-go's S3 API layer)"
+            - pkg: "cloud.google.com/"
+              desc: "no GCP SDK in the cloud-neutral core"
+            - pkg: "github.com/Azure/"
+              desc: "no Azure SDK in the cloud-neutral core"
+            - pkg: "github.com/oracle/"
+              desc: "no OCI SDK in the cloud-neutral core"
+            - pkg: "github.com/cloudflare/"
+              desc: "no Cloudflare SDK in the cloud-neutral core"
+            - pkg: "gocloud.dev/"
+              desc: "cloud abstractions only via iceberg-go"
+    errcheck:
+      exclude-functions:
+        - (*database/sql.Rows).Close
+        - (*database/sql.DB).Close
+        - (*github.com/jackc/pgx/v5.Tx).Rollback
+  exclusions:
+    paths:
+      - hack/
+formatters:
+  enable:
+    - gofmt

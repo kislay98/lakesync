@@ -1,0 +1,79 @@
+import { test, expect, type Page } from '@playwright/test'
+import { login, setTheme } from './helpers'
+
+const out = (name: string) => `../docs/screenshots/${name}.png`
+
+async function shot(page: Page, name: string) {
+  for (const theme of ['light', 'dark'] as const) {
+    await setTheme(page, theme)
+    await page.waitForTimeout(250)
+    await page.screenshot({ path: out(`${name}-${theme}`), fullPage: false })
+  }
+  await setTheme(page, 'light')
+}
+
+test('capture every screen', async ({ page }) => {
+  await page.goto('/login')
+  await page.waitForSelector('text=Sign in')
+  await shot(page, 'login')
+  await login(page)
+  await page.goto('/')
+  await page.waitForSelector('h1')
+  await shot(page, 'overview')
+  await page.goto('/pipelines')
+  await page.waitForSelector('h1')
+  await shot(page, 'pipelines')
+  const first = page.locator('a[href^="/pipelines/"]:not([href$="/new"])').first()
+  if (await first.count()) {
+    await first.click()
+    await page.waitForSelector('text=Collections')
+    await page.waitForTimeout(1500)
+    await shot(page, 'pipeline-detail')
+  }
+  await page.goto('/pipelines/new')
+  await page.waitForSelector('h1')
+  await shot(page, 'new-pipeline')
+  await page.goto('/connections')
+  await page.waitForSelector('h1')
+  await shot(page, 'connections')
+  await page.getByRole('button', { name: 'Test' }).first().click()
+  await page.waitForSelector('text=Test:')
+  await page.waitForTimeout(500)
+  await shot(page, 'connection-test')
+  await page.keyboard.press('Escape')
+  await page.goto('/tables')
+  await page.waitForSelector('h1')
+  await page.waitForTimeout(1500)
+  await shot(page, 'tables')
+  const viewer = page.locator('a[href*="/tables/shop/customers?"]').first()
+  if (await viewer.count()) {
+    await viewer.click()
+    await page.waitForSelector('[data-row="0"]')
+    await page.waitForTimeout(800)
+    await shot(page, 'data-viewer')
+    await page.locator('[data-row="0"]').click()
+    await page.waitForSelector('text=Change history')
+    await page.getByRole('tab', { name: /Change history/ }).click()
+    await page.waitForTimeout(800)
+    await shot(page, 'document-detail')
+    await page.keyboard.press('Escape')
+    await page.goto('/tables/shop/customers/health')
+    await page.waitForSelector('text=Table health')
+    await page.waitForTimeout(1200)
+    await shot(page, 'table-health')
+  }
+  await page.goto('/sql')
+  await page.waitForSelector('h1')
+  await page.waitForTimeout(800)
+  await page.getByRole('button', { name: /Run/ }).click()
+  await page.waitForSelector('text=rows', { timeout: 30000 })
+  await page.waitForTimeout(500)
+  await shot(page, 'sql-console')
+  await page.goto('/settings')
+  await page.waitForSelector('text=Maintenance thresholds')
+  await shot(page, 'settings')
+  await page.keyboard.press('Meta+k')
+  await page.waitForSelector('input[placeholder*="Jump to"]')
+  await shot(page, 'command-palette')
+  expect(true).toBeTruthy()
+})

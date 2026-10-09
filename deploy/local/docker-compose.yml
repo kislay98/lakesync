@@ -119,6 +119,39 @@ services:
       timeout: 5s
       retries: 20
 
+  # The app itself. Started by `make up` (profile "app"); `make dev` runs it on the host instead.
+  lakesync:
+    profiles: ["app"]
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: lakesync:local
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nessie:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-lakesync}:${POSTGRES_PASSWORD:-lakesync}@postgres:5432/lakesync?sslmode=disable
+      APP_SECRET_KEY: ${APP_SECRET_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme-now}
+      DEV_MODE: "true"
+      ALLOW_PRIVATE_ENDPOINTS: "true"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Shows "use local stack values" shortcuts in the connection forms.
+      LOCAL_STACK_HINTS: "true"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/readyz"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
 volumes:
   mongodb-data:
   s3-data:

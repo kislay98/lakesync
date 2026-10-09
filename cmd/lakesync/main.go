@@ -27,6 +27,7 @@ import (
 	"lakesync/internal/verify"
 
 	_ "lakesync/internal/dest/iceberg"
+	_ "lakesync/internal/source/faulty"
 	_ "lakesync/internal/source/mongodb"
 )
 

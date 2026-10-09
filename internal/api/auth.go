@@ -224,6 +224,21 @@ func (s *Server) meResponse(ctx context.Context, u *store.User, sess *store.Sess
 	}
 }
 
+// localStackHints returns ready-made values for the local compose stack, so the
+// first-run flow is a matter of clicking "use local stack values".
+func (s *Server) localStackHints() map[string]any {
+	if !s.cfg.LocalStackHints {
+		return nil
+	}
+	return map[string]any{
+		"mongodb": map[string]any{"config": map[string]any{"uri": "mongodb://mongodb:27017/?replicaSet=rs0"}, "secrets": map[string]string{}},
+		"iceberg_rest": map[string]any{
+			"config":  map[string]any{"catalog_uri": "http://nessie:19120/iceberg", "warehouse": "warehouse", "auth_type": "none", "s3_endpoint": "http://s3:9000", "s3_region": "us-east-1", "s3_path_style": true},
+			"secrets": map[string]string{"s3_access_key_id": "lakesync", "s3_secret_access_key": "lakesync-secret"},
+		},
+	}
+}
+
 func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Current string `json:"current_password"`

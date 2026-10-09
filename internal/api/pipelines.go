@@ -66,8 +66,7 @@ func (s *Server) stats(ctx context.Context, p *store.Pipeline, cols []*store.Pip
 		}
 		st.Collections++
 		st.RowsSynced += c.LastSeq
-		if c.State == store.StateStreaming && c.LastSourceTS != nil {
-			lag := time.Since(*c.LastSourceTS).Seconds()
+		if lag, ok := collectionLag(c); ok {
 			if lag > maxLag {
 				maxLag = lag
 			}
@@ -85,6 +84,21 @@ func (s *Server) stats(ctx context.Context, p *store.Pipeline, cols []*store.Pip
 	}
 	st.EventsLastHour, _ = s.st.EventsLastHour(ctx, p.ID)
 	return st
+}
+
+// collectionLag is the replication delay of the last committed batch: the time
+// between the newest source change in the batch and its commit. While events are
+// still flowing it grows with "now - source time"; when the stream is idle it
+// keeps the last measured value instead of counting up forever.
+func collectionLag(c *store.PipelineCollection) (float64, bool) {
+	if c.State != store.StateStreaming || c.LastSourceTS == nil || c.LastCommitAt == nil {
+		return 0, false
+	}
+	lag := c.LastCommitAt.Sub(*c.LastSourceTS).Seconds()
+	if lag < 0 {
+		lag = 0
+	}
+	return lag, true
 }
 
 func (s *Server) listPipelines(w http.ResponseWriter, r *http.Request) {

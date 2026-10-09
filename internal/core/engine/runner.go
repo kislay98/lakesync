@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -47,16 +48,18 @@ type runner struct {
 	cp     core.Checkpoint
 	runID  string
 
-	mergedSeq      int64
-	lastMerge      time.Time
-	lastMaint      time.Time
-	lastExpire     time.Time
-	lastOrphan     time.Time
-	failures       []time.Time
-	skippedUpdates int64
-	maintCfg       dest.MaintenanceConfig
-	mu             sync.Mutex
-	lastNotify     time.Time
+	mergedSeq          int64
+	lastMerge          time.Time
+	lastMaint          time.Time
+	lastExpire         time.Time
+	lastOrphan         time.Time
+	failures           []time.Time
+	skippedUpdates     int64
+	lastCommitAt       time.Time
+	lastCommitSourceTS time.Time
+	maintCfg           dest.MaintenanceConfig
+	mu                 sync.Mutex
+	lastNotify         time.Time
 }
 
 func newRunner(w *Worker, p *store.Pipeline, c *store.PipelineCollection, lock *store.Lock) *runner {
@@ -590,15 +593,15 @@ func (r *runner) handleRequest(ctx context.Context, action string) {
 	}
 }
 
-// updateLag publishes now - last source time.
+// updateLag publishes the replication delay: while events are buffered it is
+// now minus the oldest buffered source time; otherwise the delay of the last
+// commit (commit time minus the newest source time it contained).
 func (r *runner) updateLag(ctx context.Context, b *batcher) {
-	last := b.lastSourceTS
-	if last.IsZero() {
-		if r.c.LastSourceTS != nil {
-			last = *r.c.LastSourceTS
-		} else {
-			return
-		}
+	_ = ctx
+	switch {
+	case !b.firstSourceTS.IsZero():
+		r.w.deps.Metrics.lag.WithLabelValues(r.p.ID, r.c.Collection).Set(time.Since(b.firstSourceTS).Seconds())
+	case !r.lastCommitAt.IsZero() && !r.lastCommitSourceTS.IsZero():
+		r.w.deps.Metrics.lag.WithLabelValues(r.p.ID, r.c.Collection).Set(math.Max(0, r.lastCommitAt.Sub(r.lastCommitSourceTS).Seconds()))
 	}
-	r.w.deps.Metrics.lag.WithLabelValues(r.p.ID, r.c.Collection).Set(time.Since(last).Seconds())
 }

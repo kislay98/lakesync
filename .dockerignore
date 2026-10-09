@@ -1,0 +1,9 @@
+.git
+bin
+web/node_modules
+web/dist
+web/playwright-report
+web/test-results
+hack/phase0/phase0
+docs/screenshots
+*.log

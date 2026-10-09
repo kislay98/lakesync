@@ -1,0 +1,70 @@
+# Single-VM deployment: lakesync + Postgres + Caddy (automatic HTTPS).
+# MongoDB, object storage and the Iceberg catalog are external and configured in the UI.
+#
+#   cp .env.example .env   # fill in DOMAIN, ADMIN_*, APP_SECRET_KEY, POSTGRES_PASSWORD
+#   docker compose up -d
+#
+name: lakesync
+
+services:
+  lakesync:
+    image: ${LAKESYNC_IMAGE:-ghcr.io/lakesync/lakesync:latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://lakesync:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/lakesync?sslmode=disable
+      APP_SECRET_KEY: ${APP_SECRET_KEY:?set APP_SECRET_KEY (lakesync gen-key)}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?set ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD}
+      BASE_URL: https://${DOMAIN:?set DOMAIN}
+      DEV_MODE: "false"
+      ALLOW_PRIVATE_ENDPOINTS: ${ALLOW_PRIVATE_ENDPOINTS:-false}
+      PUBLIC_IP: ${PUBLIC_IP:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/readyz"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lakesync
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: lakesync
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lakesync -d lakesync"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - lakesync
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  postgres-data:
+  caddy-data:
+  caddy-config:
