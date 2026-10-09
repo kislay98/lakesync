@@ -11,7 +11,10 @@ export interface GridSort {
 }
 
 export interface DataGridProps {
+  /** Every column of the rows, in row order (values are indexed by this list). */
   columns: ColumnMeta[]
+  /** Columns to leave out of the display; values stay indexed by `columns`. */
+  hiddenColumns?: Set<string>
   rows: unknown[][]
   sort?: GridSort | null
   onSort?: (s: GridSort | null) => void
@@ -32,9 +35,12 @@ export interface DataGridProps {
 const DEFAULT_WIDTH = 180
 
 /** Virtualised, column-pinnable grid for tables with many rows and columns. */
-export function DataGrid({ columns, rows, sort, onSort, onRowClick, onCellClick, pinned = [], loadingMore, onEndReached, hasMore, selectedIndex, className, emptyMessage, columnWidths = {}, rowHeight = 32, headerExtra }: DataGridProps) {
+export function DataGrid({ columns, hiddenColumns, rows, sort, onSort, onRowClick, onCellClick, pinned = [], loadingMore, onEndReached, hasMore, selectedIndex, className, emptyMessage, columnWidths = {}, rowHeight = 32, headerExtra }: DataGridProps) {
   const parentRef = useRef<HTMLDivElement>(null)
-  const ordered = useMemo(() => [...columns.filter((c) => pinned.includes(c.name)), ...columns.filter((c) => !pinned.includes(c.name))], [columns, pinned])
+  const ordered = useMemo(() => {
+    const shown = columns.filter((c) => !hiddenColumns?.has(c.name))
+    return [...shown.filter((c) => pinned.includes(c.name)), ...shown.filter((c) => !pinned.includes(c.name))]
+  }, [columns, hiddenColumns, pinned])
   const widths = ordered.map((c) => columnWidths[c.name] || (c.name === '_cdc_key' ? 240 : c.type.includes('TIMESTAMP') ? 200 : c.type === 'BOOLEAN' ? 90 : /INT|DOUBLE|DECIMAL|FLOAT/.test(c.type) ? 110 : DEFAULT_WIDTH))
   const offsets = useMemo(() => {
     const out: number[] = []

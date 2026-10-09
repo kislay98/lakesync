@@ -79,7 +79,6 @@ export default function DataViewer() {
   }, [columns, isRaw, table, hiddenInit])
   const allRows = useMemo(() => rows.data?.pages.flatMap((p) => p.rows) || [], [rows.data])
   const total = rows.data?.pages[0]?.total
-  const visibleColumns = useMemo(() => columns.filter((c) => !hidden.has(c.name)), [columns, hidden])
   const keyIdx = columns.findIndex((c) => c.name === '_cdc_key')
   const idIdx = columns.findIndex((c) => c.name === '_id')
   const onEnd = useCallback(() => {
@@ -249,7 +248,8 @@ export default function DataViewer() {
           <ErrorState error={rows.error} onRetry={() => rows.refetch()} title="Could not load rows" />
         ) : (
           <DataGrid
-            columns={visibleColumns}
+            columns={columns}
+            hiddenColumns={hidden}
             rows={allRows}
             sort={sort}
             onSort={setSort}

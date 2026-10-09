@@ -33,7 +33,7 @@ func TestSplitProcesses(t *testing.T) {
 	db := fmt.Sprintf("e2e_split_%d", time.Now().Unix()%100000)
 	defer dropMongoDB(t, db)
 	ctx := context.Background()
-	client, err := mongo.Connect(options.Client().ApplyURI(mongoURI))
+	client, err := mongo.Connect(options.Client().ApplyURI(mongoURI).SetTimeout(30 * time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}

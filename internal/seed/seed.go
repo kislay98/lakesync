@@ -121,7 +121,7 @@ func Run(ctx context.Context, opts Options) error {
 	if opts.Database == "" {
 		opts.Database = "shop"
 	}
-	client, err := mongo.Connect(options.Client().ApplyURI(opts.URI).SetAppName("lakesync-seed"))
+	client, err := mongo.Connect(options.Client().ApplyURI(opts.URI).SetAppName("lakesync-seed").SetTimeout(60 * time.Second))
 	if err != nil {
 		return err
 	}

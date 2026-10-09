@@ -36,7 +36,7 @@ func TestResync(t *testing.T) {
 	p := a.createPipeline("e2e-resync", src, dst, []string{db + ".customers", db + ".products"}, 5)
 	a.waitFor(p.ID, 5*time.Minute, "initial copy", allStreaming)
 
-	client, err := mongo.Connect(options.Client().ApplyURI(mongoURI))
+	client, err := mongo.Connect(options.Client().ApplyURI(mongoURI).SetTimeout(30 * time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}

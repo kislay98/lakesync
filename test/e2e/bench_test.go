@@ -84,7 +84,7 @@ func TestBenchmark(t *testing.T) {
 	for _, c := range before.Collections {
 		startSeq += c.LastSeq
 	}
-	client, err := mongo.Connect(options.Client().ApplyURI(mongoURI))
+	client, err := mongo.Connect(options.Client().ApplyURI(mongoURI).SetTimeout(30 * time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}

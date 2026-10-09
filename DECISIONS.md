@@ -102,3 +102,12 @@ One entry per decision: date, decision, alternatives, reason. Newest at the bott
 ## 2026-10-09: Fault injection is a wrapper source type, registered only on demand
 - **Decision:** `internal/source/faulty` registers `mongodb+faults` when `LAKESYNC_ENABLE_FAULT_INJECTION=true`; faults are requested by creating files in `LAKESYNC_FAULT_DIR`.
 - **Reason:** The resync test needs a "history lost" error that a fresh replica set never produces naturally; the wrapper keeps the production binary free of test hooks unless explicitly enabled.
+
+## 2026-10-09: Every MongoDB driver operation is bounded by a client-level timeout
+- **Decision:** The source's `mongo.Client` sets `SetTimeout(2m)`; the seed tool and the test clients set shorter ones. The driver applies it per cursor iteration (`Cursor.next` wraps each call), so long full copies are unaffected.
+- **Alternatives:** No timeout (driver default), per-call contexts only.
+- **Reason:** During the end-to-end runs a test client's insert hung forever on a silently dead connection. A bounded operation turns the same failure in the app into a transient error, which the runner retries from the last bookmark, instead of a pipeline that stalls without an error.
+
+## 2026-10-09: End-to-end suites run strictly one at a time
+- **Decision:** `make e2e` runs the Go suites and then the Playwright suite; they are never run concurrently against the same MongoDB, and the setup spec filters for the seeded `shop` database.
+- **Reason:** A concurrent run let the UI's first-run flow pick a temporary database that another suite was dropping underneath it (which the app handled correctly, but the test could not pass).

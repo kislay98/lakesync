@@ -23,7 +23,7 @@ func TestSourceRemoved(t *testing.T) {
 	db := fmt.Sprintf("e2e_removed_%d", time.Now().Unix()%100000)
 	defer dropMongoDB(t, db)
 	ctx := context.Background()
-	client, err := mongo.Connect(options.Client().ApplyURI(mongoURI))
+	client, err := mongo.Connect(options.Client().ApplyURI(mongoURI).SetTimeout(30 * time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,11 @@ func TestSourceRemoved(t *testing.T) {
 			case <-stop:
 				return
 			case <-time.After(200 * time.Millisecond):
-				_, _ = client.Database(db).Collection("c").InsertOne(ctx, bson.D{{Key: "n", Value: i}})
+				ictx, cancel := context.WithTimeout(ctx, 10*time.Second)
+				if _, err := client.Database(db).Collection("c").InsertOne(ictx, bson.D{{Key: "n", Value: i}}); err != nil {
+					t.Logf("insert into c failed (continuing): %v", err)
+				}
+				cancel()
 				i++
 			}
 		}
@@ -90,10 +94,25 @@ func TestSourceRemoved(t *testing.T) {
 	if p2 := a.getPipeline(p.ID); p2.State != "source_removed" && p2.State != "streaming" {
 		t.Errorf("pipeline state %s", p2.State)
 	}
-	// stop the inserter, let c catch up, then verify (a and b no longer exist at the source)
+	// stop the inserter, let c catch up (a and b stay "source removed"), then verify
 	close(stop)
 	<-done
-	a.waitCaughtUp(p.ID, 3*time.Minute, 12*time.Second)
+	var lastSig string
+	stable := time.Now()
+	a.waitFor(p.ID, 3*time.Minute, "c to catch up", func(p *pipeline) bool {
+		for _, c := range p.Collections {
+			if c.Collection != db+".c" {
+				continue
+			}
+			sig := fmt.Sprintf("%d/%d", c.LastSeq, c.MergedSeq)
+			if sig != lastSig {
+				lastSig = sig
+				stable = time.Now()
+			}
+			return c.State == "streaming" && c.LastSeq == c.MergedSeq && time.Since(stable) > 12*time.Second
+		}
+		return false
+	})
 	ok, out := a.runVerify("e2e-removed")
 	if !ok {
 		for _, line := range strings.Split(out, "\n") {

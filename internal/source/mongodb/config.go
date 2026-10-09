@@ -342,6 +342,7 @@ func canonicalOption(k string) string {
 // Defaults for client behaviour.
 const (
 	connectTimeout         = 10 * time.Second
+	operationTimeout       = 2 * time.Minute // bounds each driver operation; change streams wait at most MaxAwaitTime
 	serverSelectionTimeout = 10 * time.Second
 	maxPoolSize            = 50 // one client per source; Atlas Free allows 500 connections
 )
@@ -353,7 +354,10 @@ func clientOptions(cfg Config, sec Secrets) (*options.ClientOptions, error) {
 		SetAppName(core.AppName).
 		SetConnectTimeout(connectTimeout).
 		SetServerSelectionTimeout(serverSelectionTimeout).
-		SetMaxPoolSize(maxPoolSize)
+		SetMaxPoolSize(maxPoolSize).
+		// every operation is bounded, so a connection that silently dies surfaces as a
+		// transient error (and a retry) instead of a stalled pipeline
+		SetTimeout(operationTimeout)
 	if cfg.Username != "" {
 		cred := options.Credential{Username: cfg.Username, Password: sec.Password, PasswordSet: true}
 		if cfg.AuthSource != "" {
