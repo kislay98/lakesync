@@ -33,7 +33,7 @@ open http://localhost:8080                             # 4  log in: admin@exampl
 # 5  click "Start setup", press "Use the local stack values" in both connection forms, pick the shop collections, Create and start
 ```
 
-`make seed` runs against the local MongoDB (`localhost:27017`); it introduces a brand-new field
+`make seed` runs the seed tool from the app container against the stack's MongoDB; it introduces a brand-new field
 after one minute and type conflicts after two, so you can watch schema evolution and the
 Table health screen react. `make verify` compares every collection with its clean Iceberg table.
 

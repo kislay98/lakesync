@@ -424,6 +424,9 @@ func (s *Server) pipelineAction(action string) http.HandlerFunc {
 		}
 		// collections that have no running runner get their display state refreshed by the worker
 		_ = s.st.Notify(r.Context(), store.Event{Type: "pipeline", PipelineID: p.ID})
+		if fresh, err := s.st.GetPipeline(r.Context(), p.ID); err == nil {
+			p = fresh // the view must show the desired state just written
+		}
 		v, _ := s.pipelineView(r.Context(), p)
 		s.writeJSON(w, 200, v)
 	}
@@ -457,6 +460,9 @@ func (s *Server) collectionAction(action string) http.HandlerFunc {
 			return
 		}
 		_ = s.st.Notify(r.Context(), store.Event{Type: "pipeline", PipelineID: p.ID})
+		if fresh, err := s.st.GetPipeline(r.Context(), p.ID); err == nil {
+			p = fresh
+		}
 		v, _ := s.pipelineView(r.Context(), p)
 		s.writeJSON(w, 200, v)
 	}
