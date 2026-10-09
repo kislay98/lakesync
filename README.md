@@ -39,6 +39,7 @@ Table health screen react. `make verify` compares every collection with its clea
 
 Other targets: `make dev` (Go live reload + Vite dev server), `make test`, `make e2e`,
 `make lint`, `make docker` (multi-arch image), `make down`, `make reset` (also deletes volumes).
+Setting it up on a machine that has never run it, step by step: [`docs/setup-new-machine.md`](docs/setup-new-machine.md).
 Developer notes, including the macOS/Colima caveats, are in [`docs/development.md`](docs/development.md).
 
 ## Screens
