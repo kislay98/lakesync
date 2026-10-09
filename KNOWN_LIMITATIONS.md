@@ -27,6 +27,10 @@ Stated plainly. Each entry says what is missing, why, and what would unblock it.
 - **What:** When the object store answers reads with errors (seen on the local RustFS before its file-descriptor limit was raised, see `DECISIONS.md`), the maintenance job fails with that error in the run history and the pipeline keeps streaming; the next maintenance cycle (or the Table health button) runs it again. Maintenance concurrency is capped at two jobs per process.
 - **Unblock:** Give the object store enough file descriptors (the compose files set 65,536) and raise the maintenance interval if the store is slow.
 
+## The single-VM deployment was validated, not deployed
+- **What:** `deploy/vm/docker-compose.yml` and the `Caddyfile` pass `docker compose config` and the image they run is the one the quickstart check used, but no public VM with a DNS name was available, so Caddy's certificate issuance and the HTTPS path were not exercised live.
+- **Unblock:** Follow `docs/deploy-vm.md` on a VM with ports 80/443 open; Caddy obtains the certificate on first start.
+
 ## The containerised test runner is untested
 - **What:** `Dockerfile.e2e` and `make e2e-container` (the suites run from inside the compose network) were written but never exercised; the image build was too slow on the build machine. The suites were run from the host with `make e2e`.
 

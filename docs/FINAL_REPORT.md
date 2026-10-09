@@ -58,17 +58,28 @@ See `README.md` (five-command quickstart), `docs/deploy-vm.md`, `docs/destinatio
 | 7 | New fields and type conflicts never stop a pipeline and are visible in Table health | PASS | Correctness e2e asserts the new column `loyaltyTier` and non-zero conflict counts; Table health shows per-field conflict counts (`docs/screenshots/table-health-light.png`) and the schema drift view. |
 | 8 | Data viewer: paging, sorting, filtering, search, JSON side panel, document history | PASS | `TestIntegrationCatalog` (keyset paging without loss or duplicates, sort, filter, search, history diffs); Playwright `data viewer` spec; screenshots. |
 | 9 | SQL console runs SELECT and rejects everything else | PASS | `TestReadOnlyValidation` (18 rejected statements incl. INSERT, COPY, ATTACH, INSTALL, local file reads, `duckdb_secrets`), `TestSecurity` e2e, Playwright `sql console` spec. |
-| 10 | Table health shows real metrics; maintenance reduces file counts without changing data | PASS | Phase 0 step (g); `TestIntegrationLifecycle`/maintenance tests in `internal/dest/iceberg`; correctness e2e runs maintenance then verify; benchmark section 5 below. |
+| 10 | Table health shows real metrics; maintenance reduces file counts without changing data | PASS | Phase 0 step (g); `TestIntegrationLifecycle`/maintenance tests in `internal/dest/iceberg`; correctness e2e runs maintenance then verify; benchmark stage 5: raw table 83 files → 1, clean table 83 files + 707 delete files → 1 file, `verify` exact afterwards (`docs/BENCHMARKS.md`). |
 | 11 | Secrets encrypted at rest, never returned, never logged | PASS | `internal/secrets` tests; `TestIntegrationAPI` (secret never in responses, `__unchanged__` keeps it); `TestSecurity` greps the server log. |
 | 12 | Cloud-neutral import check; switching catalog/storage is configuration only | PASS | `.golangci.yml` depguard rule, `make lint` clean; destination config is the only place endpoints live (`docs/destinations.md`). |
 | 13 | `serve` and split `serve --no-worker` + `worker` both work | PASS | `TestSplitProcesses` (API without worker + separate worker process, pipeline streams, `/readyz` reports the external worker). |
-| 14 | One multi-arch Docker image; `deploy/vm` brings up HTTPS with Caddy | __DOCKER__ | `Dockerfile` (multi-stage, `linux/amd64` + `linux/arm64` in CI), `deploy/vm/docker-compose.yml` + `Caddyfile`. |
+| 14 | One multi-arch Docker image; `deploy/vm` brings up HTTPS with Caddy | PASS (image), PARTIAL (VM) | `Dockerfile` (multi-stage, non-root, DuckDB extensions bundled): built locally for `linux/arm64` as `lakesync:local` (415 MB) and used by the quickstart check; the `linux/amd64` half of the multi-arch build is only exercised by the CI workflow (`make docker`), which had no runner here. `deploy/vm/docker-compose.yml` + `Caddyfile` validate with `docker compose config` and are documented in `docs/deploy-vm.md`, but no public VM with a DNS name was available, so the HTTPS path was not exercised live. |
 | 15 | `make test` and `make e2e` pass in CI | PASS (locally) | `.github/workflows/ci.yml` defines lint, unit, integration, e2e and docker jobs; this build had no remote to run them on, so every job's commands were run locally (results below). |
 | 16 | Docs exist | PASS | README, ARCHITECTURE, phase0, destinations, mongodb-atlas, deploy-vm, BENCHMARKS, DECISIONS, KNOWN_LIMITATIONS, screenshots (30 PNGs, light and dark). |
 
 ## Test results
 
-__TESTS__
+All suites were run on 2026-10-09 against the local compose stack (Colima VM, see
+`docs/development.md`), one suite at a time.
+
+| Suite | Command | Result |
+|---|---|---|
+| Lint | `make lint` (golangci-lint with the cloud-neutral depguard rule; oxlint + tsc for the UI) | 0 Go issues; UI type-checks, 7 oxlint warnings left (shadcn export patterns, TanStack table) |
+| Unit | `go test ./internal/...` (44 test functions: BSON mapping, flattening, schema inference, names, checkpoint round trip, read-only SQL validation, merge SQL, secrets, config parsing, hints) | PASS |
+| Integration | `go test -tags integration ./internal/...` (MongoDB source stream, Iceberg catalog lifecycle incl. schema evolution, maintenance and checkpoint reconciliation, DuckDB viewer/console/drift, store, API) | PASS (7 packages) |
+| End-to-end, Go | `go test -tags e2e ./test/e2e/` (`TestCorrectness`, `TestResync`, `TestSourceRemoved`, `TestSplitProcesses`, `TestSecurity`) | PASS, final run of 2026-10-09: TestCorrectness 658 s (full 10-minute chaos schedule, verify exact), TestSourceRemoved 23 s, TestResync 49 s, TestSplitProcesses 13 s, TestSecurity 2 s; `ok lakesync/test/e2e 747.7s` |
+| End-to-end, UI | `scripts/ui-e2e.sh` (Playwright, fresh database, 5 specs: first-run flow, data viewer, SQL console, pause/resume, connection hints) | PASS, 5/5 in 20 s |
+| Quickstart | `scripts/quickstart-check.sh` (`make up` with the built image, `make seed` through the container, setup through the API with the local-stack hints, streaming, viewer, SQL, `make verify`) | PASS (2026-10-09, after `make reset`): stack healthy, `/readyz` ok, seed through the container, pipeline streaming 6 s after creation, viewer 1,000 rows / 17 columns, SQL console `count(*)` = 3,000, container `verify`: 4 collections match exactly, zero duplicate keys |
+| Benchmark | `make bench` | see `docs/BENCHMARKS.md` |
 
 ## Benchmarks
 
@@ -97,9 +108,9 @@ All decisions are logged with alternatives and reasons in `DECISIONS.md`.
 
 See `KNOWN_LIMITATIONS.md`: Atlas untested live, SigV4 catalogs unsupported, other catalogs
 documented but untested, Nessie snapshot history and GC, delete-file accumulation until
-maintenance, occasional object-store errors failing a maintenance job (retried on the next
-cycle), the containerised test runner untested, single-column sort, stretch goals S1/S2/S5 not
-implemented.
+maintenance, object-store errors failing a maintenance job rather than the pipeline (retried on
+the next cycle), the single-VM deployment validated but not deployed to a public host, the
+containerised test runner untested, single-column sort, stretch goals S1/S2/S5 not implemented.
 
 ## Stretch goals
 
