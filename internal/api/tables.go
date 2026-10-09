@@ -40,7 +40,6 @@ type tableView struct {
 type cachedTables struct {
 	at     time.Time
 	tables []tableView
-	err    error
 }
 
 // destinationFor resolves which destination a namespace.table belongs to.

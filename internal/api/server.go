@@ -332,7 +332,7 @@ func (s *Server) static(w http.ResponseWriter, r *http.Request) {
 	}
 	if f, err := sub.Open(p); err == nil {
 		st, _ := f.Stat()
-		f.Close()
+		_ = f.Close()
 		if st != nil && !st.IsDir() {
 			if strings.HasPrefix(p, "assets/") {
 				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")

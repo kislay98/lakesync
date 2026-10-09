@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -107,7 +106,6 @@ type state struct {
 	opts      Options
 	rng       *rand.Rand
 	db        *mongo.Database
-	mu        sync.Mutex
 	ids       map[string][]bson.ObjectID // live ids per collection
 	customers []bson.ObjectID
 	products  []bson.ObjectID
@@ -255,7 +253,7 @@ func (s *state) newDoc(coll string) bson.D {
 		}
 		d := bson.D{
 			{Key: "sku", Value: fmt.Sprintf("SKU-%06d", s.rng.Intn(1_000_000))},
-			{Key: "name", Value: strings.Title(categories[s.rng.Intn(len(categories))]) + " " + fmt.Sprint(s.rng.Intn(1000))},
+			{Key: "name", Value: titleCase(categories[s.rng.Intn(len(categories))]) + " " + fmt.Sprint(s.rng.Intn(1000))},
 			{Key: "category", Value: categories[s.rng.Intn(len(categories))]},
 			{Key: "price", Value: price},
 			{Key: "attributes", Value: attrs},
@@ -300,6 +298,13 @@ func (s *state) newDoc(coll string) bson.D {
 			{Key: "value", Value: s.rng.Intn(1000)},
 		}
 	}
+}
+
+func titleCase(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 func pickTags(rng *rand.Rand) bson.A {

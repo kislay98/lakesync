@@ -80,7 +80,7 @@ func (e *Engine) Merge(ctx context.Context, alias, ns, rawTable, cleanTable stri
 	if _, err := conn.ExecContext(ctx, stmts[0]); err != nil {
 		return nil, fmt.Errorf("stage batch: %w", friendlyErr(err))
 	}
-	defer conn.ExecContext(context.WithoutCancel(ctx), "DROP TABLE IF EXISTS "+batch)
+	defer func() { _, _ = conn.ExecContext(context.WithoutCancel(ctx), "DROP TABLE IF EXISTS "+batch) }()
 	var maxSeq *int64
 	if err := conn.QueryRowContext(ctx, fmt.Sprintf("SELECT count(*), max(%s) FROM %s", quoteIdent(core.ColSeq), batch)).Scan(&res.Candidates, &maxSeq); err != nil {
 		return nil, err
@@ -149,7 +149,7 @@ SELECT %s FROM (
 	if _, err := conn.ExecContext(ctx, stage); err != nil {
 		return nil, fmt.Errorf("stage rebuild: %w", friendlyErr(err))
 	}
-	defer conn.ExecContext(context.WithoutCancel(ctx), "DROP TABLE IF EXISTS "+batch)
+	defer func() { _, _ = conn.ExecContext(context.WithoutCancel(ctx), "DROP TABLE IF EXISTS "+batch) }()
 	res := &MergeResult{}
 	var maxSeq *int64
 	if err := conn.QueryRowContext(ctx, fmt.Sprintf("SELECT count(*), max(%s) FROM %s", quoteIdent(core.ColSeq), batch)).Scan(&res.Candidates, &maxSeq); err != nil {

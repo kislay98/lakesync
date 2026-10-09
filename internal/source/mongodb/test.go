@@ -104,7 +104,7 @@ func (s *Source) Test(ctx context.Context) core.TestReport {
 			}
 			return core.TestFail, fmt.Sprintf("cannot connect to %s: %v", target, err), hint
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		if !parsed.TLS() {
 			return core.TestOK, "TCP connection to " + target + " (no TLS)", ""
 		}

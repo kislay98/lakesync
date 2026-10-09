@@ -91,7 +91,7 @@ func (d *Destination) rewrite(ctx context.Context, namespace, name string, kind 
 		}
 	case dest.MaintRewriteClean:
 		needs := st.deleteFiles > cfg.DeleteFilesTrigger || st.smallFiles > cfg.SmallFilesTrigger
-		if !needs && !(forced && (st.deleteFiles > 0 || st.dataFiles > 1)) {
+		if !needs && (!forced || (st.deleteFiles == 0 && st.dataFiles <= 1)) {
 			res.Skipped = true
 			res.Reason = fmt.Sprintf("%d delete files and %d small files are within thresholds (%d / %d)", st.deleteFiles, st.smallFiles, cfg.DeleteFilesTrigger, cfg.SmallFilesTrigger)
 			return res, nil

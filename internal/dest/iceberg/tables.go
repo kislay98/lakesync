@@ -193,19 +193,3 @@ func (d *Destination) DropTables(ctx context.Context, t core.TableSpec) error {
 	}
 	return nil
 }
-
-// setProps commits table properties on their own (used for follow-up stamps).
-func (d *Destination) setProps(ctx context.Context, namespace, name string, props iceberg.Properties) error {
-	return withRetry(ctx, 5, func() error {
-		tbl, err := d.loadTable(ctx, namespace, name)
-		if err != nil {
-			return err
-		}
-		tx := tbl.NewTransaction()
-		if err := tx.SetProperties(props); err != nil {
-			return err
-		}
-		_, err = tx.Commit(ctx)
-		return mapCommitErr(err, d.cfg)
-	})
-}

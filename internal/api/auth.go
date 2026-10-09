@@ -219,6 +219,7 @@ func (s *Server) meResponse(ctx context.Context, u *store.User, sess *store.Sess
 			"dev_mode": s.cfg.DevMode,
 		},
 		"egress_ip":               s.egress.get(),
+		"local_stack_hints":       s.localStackHints(),
 		"allow_private_endpoints": s.cfg.AllowPrivateEndpoints,
 		"worker_in_process":       s.worker != nil,
 	}

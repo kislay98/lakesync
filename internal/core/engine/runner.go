@@ -54,7 +54,6 @@ type runner struct {
 	lastExpire         time.Time
 	lastOrphan         time.Time
 	failures           []time.Time
-	skippedUpdates     int64
 	lastCommitAt       time.Time
 	lastCommitSourceTS time.Time
 	maintCfg           dest.MaintenanceConfig

@@ -211,7 +211,7 @@ func (e *Engine) Rows(ctx context.Context, req RowsRequest) (*RowsResult, error)
 		sb.WriteString(quoteIdent(sortCol) + " " + dir + " NULLS LAST, ")
 	}
 	sb.WriteString(quoteIdent(core.ColKey) + " ASC")
-	sb.WriteString(fmt.Sprintf(" LIMIT %d", req.Limit+1))
+	fmt.Fprintf(&sb, " LIMIT %d", req.Limit+1)
 
 	rows, err := e.db.QueryContext(ctx, sb.String(), args...)
 	if err != nil {

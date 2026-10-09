@@ -123,7 +123,7 @@ func (w *Worker) reconcile(ctx context.Context) {
 		}
 		k := key(c.PipelineID, c.Collection)
 		shouldRun := p.DesiredState == store.DesiredRunning && c.Enabled && c.State != store.StateSourceRemoved
-		if c.State == store.StateFailed && !(c.RequestedAction != nil && *c.RequestedAction == actionRetry) {
+		if c.State == store.StateFailed && (c.RequestedAction == nil || *c.RequestedAction != actionRetry) {
 			shouldRun = false
 		}
 		if shouldRun {

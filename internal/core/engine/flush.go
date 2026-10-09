@@ -17,7 +17,6 @@ type batcher struct {
 	bytes         int64
 	lastSourceTS  time.Time
 	firstSourceTS time.Time
-	skipped       int64
 }
 
 func newBatcher(r *runner) *batcher { return &batcher{r: r} }

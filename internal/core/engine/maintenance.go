@@ -101,7 +101,7 @@ func (r *runner) runMaintenance(ctx context.Context, force bool) {
 		if !j.due || ctx.Err() != nil {
 			continue
 		}
-		RunMaintenanceJob(ctx, r.w.deps, m, r.p.ID, r.c.Collection, r.spec.Namespace, j.table, j.kind, r.maintCfg, &cp, force)
+		_, _ = RunMaintenanceJob(ctx, r.w.deps, m, r.p.ID, r.c.Collection, r.spec.Namespace, j.table, j.kind, r.maintCfg, &cp, force)
 		switch j.kind {
 		case dest.MaintExpireSnapshots:
 			r.lastExpire = time.Now()
@@ -171,6 +171,6 @@ func (w *Worker) runDetachedMaintenance(ctx context.Context, p *store.Pipeline, 
 		table string
 		kind  dest.MaintenanceKind
 	}{{spec.Raw, dest.MaintCompactRaw}, {spec.Clean, dest.MaintRewriteClean}, {spec.Raw, dest.MaintExpireSnapshots}, {spec.Clean, dest.MaintExpireSnapshots}, {spec.Raw, dest.MaintOrphanCleanup}, {spec.Clean, dest.MaintOrphanCleanup}} {
-		RunMaintenanceJob(ctx, w.deps, m, p.ID, c.Collection, spec.Namespace, j.table, j.kind, cfg, cp, true)
+		_, _ = RunMaintenanceJob(ctx, w.deps, m, p.ID, c.Collection, spec.Namespace, j.table, j.kind, cfg, cp, true)
 	}
 }

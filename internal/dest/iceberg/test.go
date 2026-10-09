@@ -316,7 +316,7 @@ func probeStorage(fs icebergio.IO, path string) (string, string, error) {
 		return "", "", fmt.Errorf("read back %s: %w", path, err)
 	}
 	got, err := io.ReadAll(f)
-	f.Close()
+	_ = f.Close()
 	if err != nil || string(got) != string(payload) {
 		return "", "", fmt.Errorf("read back %s: content mismatch", path)
 	}

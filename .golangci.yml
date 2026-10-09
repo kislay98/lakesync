@@ -36,10 +36,29 @@ linters:
             - pkg: "gocloud.dev/"
               desc: "cloud abstractions only via iceberg-go"
     errcheck:
+      # Deferred cleanups whose errors cannot be acted on.
       exclude-functions:
         - (*database/sql.Rows).Close
         - (*database/sql.DB).Close
-        - (*github.com/jackc/pgx/v5.Tx).Rollback
+        - (*database/sql.Conn).Close
+        - (io.Closer).Close
+        - (io.ReadCloser).Close
+        - (*os.File).Close
+        - (*github.com/jackc/pgx/v5.Conn).Close
+        - (github.com/jackc/pgx/v5.Tx).Rollback
+        - (*go.mongodb.org/mongo-driver/v2/mongo.Client).Disconnect
+        - (*go.mongodb.org/mongo-driver/v2/mongo.Cursor).Close
+        - (*go.mongodb.org/mongo-driver/v2/mongo.ChangeStream).Close
+        - (lakesync/internal/source.EventIterator).Close
+        - (lakesync/internal/source.Source).Close
+        - (lakesync/internal/dest.Destination).Close
+        - (*lakesync/internal/query.Engine).Close
+        - (*lakesync/internal/dest/iceberg.Destination).Close
+        - (*lakesync/internal/source/mongodb.Source).Close
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - fmt.Sscan
   exclusions:
     paths:
       - hack/
