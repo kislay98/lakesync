@@ -432,10 +432,11 @@ func (s *state) updateFields(coll string) bson.D {
 		return d
 	case "products":
 		price, _ := bson.ParseDecimal128(fmt.Sprintf("%d.%02d", 5+s.rng.Intn(500), s.rng.Intn(100)))
-		d := bson.D{{Key: "price", Value: price}, {Key: "stock", Value: int32(s.rng.Intn(500))}}
+		var stock any = int32(s.rng.Intn(500))
 		if conflict && s.rng.Intn(4) == 0 {
-			d = append(d, bson.E{Key: "stock", Value: "out of stock"})
+			stock = "out of stock" // string into a long column
 		}
+		d := bson.D{{Key: "price", Value: price}, {Key: "stock", Value: stock}}
 		return d
 	case "orders":
 		d := bson.D{{Key: "status", Value: statuses[s.rng.Intn(len(statuses))]}}
