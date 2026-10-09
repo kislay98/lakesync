@@ -503,6 +503,7 @@ func freePort(base int) int { return base + rand.Intn(500) }
 func (a *app) waitMaintenance(pipelineID, collection string, since time.Time, timeout time.Duration, kinds ...string) {
 	deadline := time.Now().Add(timeout)
 	for {
+		// every maintenance run row has kind "maintenance"; the job kind is in details
 		var runs []struct {
 			Collection string     `json:"collection"`
 			Kind       string     `json:"kind"`
@@ -510,11 +511,15 @@ func (a *app) waitMaintenance(pipelineID, collection string, since time.Time, ti
 			EndedAt    *time.Time `json:"ended_at"`
 			Status     string     `json:"status"`
 			Error      *string    `json:"error"`
+			Details    struct {
+				Kind  string `json:"kind"`
+				Table string `json:"table"`
+			} `json:"details"`
 		}
 		a.call("GET", "/api/pipelines/"+pipelineID+"/runs?limit=200", nil, &runs)
 		done := map[string]bool{}
 		for _, r := range runs {
-			if r.Collection != collection || r.StartedAt.Before(since) || r.EndedAt == nil {
+			if r.Kind != "maintenance" || r.Collection != collection || r.StartedAt.Before(since) || r.EndedAt == nil {
 				continue
 			}
 			if r.Status == "failed" {
@@ -522,9 +527,9 @@ func (a *app) waitMaintenance(pipelineID, collection string, since time.Time, ti
 				if r.Error != nil {
 					msg = *r.Error
 				}
-				a.t.Fatalf("maintenance %s on %s failed: %s", r.Kind, collection, msg)
+				a.t.Fatalf("maintenance %s on %s failed: %s", r.Details.Kind, r.Details.Table, msg)
 			}
-			done[r.Kind] = true
+			done[r.Details.Kind] = true
 		}
 		all := true
 		for _, k := range kinds {
