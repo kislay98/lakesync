@@ -23,10 +23,9 @@ const KEY = 'lakesync.sql.draft'
 
 export default function SqlConsole() {
   const dests = useQuery({ queryKey: ['connections', 'destination'], queryFn: () => endpoints.connections('destination') })
-  const [destId, setDestId] = useState('')
-  useEffect(() => {
-    if (!destId && dests.data?.length) setDestId(dests.data[0].id)
-  }, [dests.data, destId])
+  const [destChoice, setDestId] = useState('')
+  // the first destination is preselected (derived, so no effect is needed)
+  const destId = destChoice || dests.data?.[0]?.id || ''
   const schema = useQuery({ queryKey: ['query-schema', destId], queryFn: () => endpoints.querySchema(destId), enabled: !!destId, staleTime: 60000 })
   const history_ = useQuery({ queryKey: ['query-history'], queryFn: endpoints.queryHistory })
   const [result, setResult] = useState<QueryResult | null>(null)
@@ -61,7 +60,9 @@ export default function SqlConsole() {
     if (text.trim()) run.mutate(text)
   }, [run])
   const runRef = useRef(runCurrent)
-  runRef.current = runCurrent
+  useEffect(() => {
+    runRef.current = runCurrent
+  })
   useEffect(() => {
     if (!editorRef.current || viewRef.current) return
     let draft = ''

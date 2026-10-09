@@ -37,7 +37,22 @@ type Worker struct {
 	// ReconcileInterval is how often desired vs actual state is compared.
 	ReconcileInterval time.Duration
 	started           time.Time
+	// maintSem caps how many compactions run at once in this process; they
+	// read and rewrite whole tables and the object store is the bottleneck.
+	maintSem chan struct{}
 }
+
+// acquireMaint waits for a maintenance slot; it returns false when ctx ends first.
+func (w *Worker) acquireMaint(ctx context.Context) bool {
+	select {
+	case w.maintSem <- struct{}{}:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
+func (w *Worker) releaseMaint() { <-w.maintSem }
 
 // New creates a worker.
 func New(d Deps) *Worker {
@@ -47,7 +62,7 @@ func New(d Deps) *Worker {
 	if d.Metrics == nil {
 		d.Metrics = NewMetrics(nil)
 	}
-	return &Worker{deps: d, pool: newPool(d), runners: map[string]*runner{}, ReconcileInterval: 5 * time.Second}
+	return &Worker{deps: d, pool: newPool(d), runners: map[string]*runner{}, ReconcileInterval: 5 * time.Second, maintSem: make(chan struct{}, 2)}
 }
 
 // Run reconciles until ctx ends, then waits for runners to stop gracefully.

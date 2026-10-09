@@ -78,7 +78,7 @@ test.describe('data viewer', () => {
     await page.locator('[title^="name ("]').first().click({ force: true })
     await expect(page.locator('[data-row="0"]')).toBeVisible({ timeout: 30000 })
     // JSON side panel from a nested column
-    await page.locator('[data-row="0"]').getByText('{ }').first().click()
+    await page.locator('[data-row="0"]').getByText(/^(\{ \}|\[ \])$/).first().click()
     await expect(page.getByText('Nested value stored as JSON text')).toBeVisible()
     await page.keyboard.press('Escape')
     // document detail with change history
@@ -104,7 +104,7 @@ test.describe('sql console', () => {
     await page.keyboard.type('SELECT 1 AS one, 2 AS two')
     await page.getByRole('button', { name: /Run/ }).click()
     await expect(page.getByTitle(/^one \(/)).toBeVisible({ timeout: 30000 })
-    await expect(page.getByText(/^1 row/)).toBeVisible()
+    await expect(page.getByText(/^1 row/).first()).toBeVisible()
     await page.locator('.cm-content').click()
     await page.keyboard.press('Meta+a')
     await page.keyboard.type('INSERT INTO shop.customers VALUES (1)')
@@ -121,6 +121,9 @@ test.describe('pipeline controls', () => {
     const present = await card.waitFor({ state: 'visible', timeout: 20000 }).then(() => true, () => false)
     test.skip(!present, 'needs a pipeline')
     await card.click()
+    // The detail page renders Pause while running and Start/Resume otherwise; wait for either.
+    const control = page.getByRole('button', { name: /^(Pause|Resume|Start)$/ }).first()
+    await control.waitFor({ state: 'visible', timeout: 30000 })
     const pause = page.getByRole('button', { name: 'Pause' })
     if (await pause.count()) {
       await pause.click()

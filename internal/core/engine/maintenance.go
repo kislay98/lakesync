@@ -84,6 +84,10 @@ func (r *runner) runMaintenance(ctx context.Context, force bool) {
 	if !ok {
 		return
 	}
+	if !r.w.acquireMaint(ctx) {
+		return
+	}
+	defer r.w.releaseMaint()
 	cp := r.cp
 	jobs := []struct {
 		table string
@@ -164,6 +168,10 @@ func (w *Worker) runDetachedMaintenance(ctx context.Context, p *store.Pipeline, 
 	if !ok {
 		return
 	}
+	if !w.acquireMaint(ctx) {
+		return
+	}
+	defer w.releaseMaint()
 	spec := core.TableSpec{Namespace: p.Namespace, Raw: c.RawTable, Clean: c.CleanTable, Entity: c.Collection}
 	cp, _ := dst.LastCheckpoint(ctx, spec)
 	cfg := LoadMaintenanceSettings(ctx, w.deps.Store).Config()

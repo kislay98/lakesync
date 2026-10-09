@@ -230,6 +230,11 @@ func (r *runner) recordFailure(ctx context.Context, err error) bool {
 // session connects, decides where to continue from and runs the lifecycle
 // until an error, a terminal state or cancellation.
 func (r *runner) session(ctx context.Context) error {
+	// Earlier sessions of this runner wrote state, generation and seq to the
+	// store; a retry must decide from that row, not from the one it started with.
+	if c, err := r.w.deps.Store.GetCollection(ctx, r.p.ID, r.c.Collection); err == nil {
+		r.c = c
+	}
 	var err error
 	r.src, err = r.w.pool.source(ctx, r.p.SourceID)
 	if err != nil {
@@ -254,6 +259,16 @@ func (r *runner) session(ctx context.Context) error {
 		r.resyncOnStart = false
 		r.cp = *cp
 		if err := r.initialize(ctx, cp.Generation+1, "requested by the user"); err != nil {
+			return err
+		}
+	} else if r.c.LastSeq == 0 && r.c.State == store.StateCreated {
+		// A pipeline that has never run found tables with another pipeline's
+		// checkpoint (for example a pipeline deleted without dropping its tables).
+		// Its bookmark belongs to a different history: keep the data, start a fresh
+		// generation and rebuild the clean table from it.
+		r.cp = *cp
+		r.log.Warn(ctx, "existing tables carry a checkpoint from another pipeline; starting a fresh generation", map[string]any{"generation": cp.Generation + 1})
+		if err := r.initialize(ctx, cp.Generation+1, "existing tables were found with an older checkpoint"); err != nil {
 			return err
 		}
 	} else {

@@ -33,8 +33,13 @@ const ops: { v: ApiFilter['op']; label: string; args: number }[] = [
   { v: 'notnull', label: 'is not null', args: 0 },
 ]
 
-export default function DataViewer() {
+/** Remounts the viewer per table so its state (sort, filters, hidden columns) resets. */
+export default function DataViewerRoute() {
   const { ns = '', table = '' } = useParams()
+  return <DataViewer key={`${ns}/${table}`} ns={ns} table={table} />
+}
+
+function DataViewer({ ns, table }: { ns: string; table: string }) {
   const [sp, setSp] = useSearchParams()
   const dest = sp.get('destination') || undefined
   const schema = useQuery({ queryKey: ['schema', ns, table, dest], queryFn: () => endpoints.tableSchema(ns, table, dest) })
@@ -45,23 +50,15 @@ export default function DataViewer() {
   const [filters, setFilters] = useState<ApiFilter[]>([])
   const [search, setSearch] = useState('')
   const [debounced, setDebounced] = useState('')
-  const [hidden, setHidden] = useState<Set<string>>(new Set())
+  const [hiddenOverride, setHiddenOverride] = useState<Set<string> | null>(null)
   const [selected, setSelected] = useState<{ row: unknown[]; index: number } | null>(null)
   const [cell, setCell] = useState<{ column: ColumnMeta; value: unknown } | null>(null)
   const [draft, setDraft] = useState<{ column: string; op: ApiFilter['op']; value: string; value2: string } | null>(null)
+  const [filterOpen, setFilterOpen] = useState(false)
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search), 300)
     return () => clearTimeout(t)
   }, [search])
-  const [hiddenInit, setHiddenInit] = useState('')
-  useEffect(() => {
-    setSort(null)
-    setFilters([])
-    setSearch('')
-    setSelected(null)
-    setHidden(new Set())
-    setHiddenInit('')
-  }, [ns, table])
   const sortParam = sort ? `${sort.desc ? '-' : ''}${sort.column}` : undefined
   const rows = useInfiniteQuery({
     queryKey: ['rows', ns, table, dest, sortParam, filters, debounced],
@@ -69,14 +66,14 @@ export default function DataViewer() {
     initialPageParam: '',
     getNextPageParam: (last) => (last.has_more ? last.next_cursor : undefined),
   })
-  const columns = rows.data?.pages[0]?.columns || []
+  const columns = useMemo(() => rows.data?.pages[0]?.columns || [], [rows.data])
   // default column visibility: clean tables hide the bookkeeping columns, raw tables show the event ones
-  useEffect(() => {
-    if (!columns.length || hiddenInit === table) return
+  const defaultHidden = useMemo(() => {
     const hide = isRaw ? ['_cdc_key', '_cdc_generation', '_cdc_ingested_at', '_cdc_doc'] : ['_cdc_key', '_cdc_seq', '_cdc_generation', '_cdc_ingested_at', '_cdc_source_ts']
-    setHidden(new Set(hide.filter((h) => columns.some((c) => c.name === h))))
-    setHiddenInit(table)
-  }, [columns, isRaw, table, hiddenInit])
+    return new Set(hide.filter((h) => columns.some((c) => c.name === h)))
+  }, [columns, isRaw])
+  const hidden = hiddenOverride ?? defaultHidden
+  const setHidden = (next: Set<string> | ((h: Set<string>) => Set<string>)) => setHiddenOverride(typeof next === 'function' ? next(hidden) : next)
   const allRows = useMemo(() => rows.data?.pages.flatMap((p) => p.rows) || [], [rows.data])
   const total = rows.data?.pages[0]?.total
   const keyIdx = columns.findIndex((c) => c.name === '_cdc_key')
@@ -92,6 +89,7 @@ export default function DataViewer() {
     if (op.args === 2) f.value2 = draft.value2
     setFilters((fs) => [...fs, f])
     setDraft(null)
+    setFilterOpen(false)
   }
   const switchTable = (t: string) => {
     setSp((prev) => {
@@ -154,7 +152,7 @@ export default function DataViewer() {
           <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input className="pl-8" placeholder="Search all text columns" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <DropdownMenu>
+        <DropdownMenu open={filterOpen} onOpenChange={setFilterOpen}>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm">
               <Filter /> Add filter

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { ClipboardPaste, FlaskConical, Save, Wand2 } from 'lucide-react'
@@ -27,16 +27,15 @@ export function ConnectionForm({ kind, existing, onSaved, onCancel, compact, aut
   const qc = useQueryClient()
   const types = useQuery({ queryKey: ['types'], queryFn: endpoints.types, staleTime: Infinity })
   const list: TypeInfo[] = useMemo(() => (kind === 'source' ? types.data?.sources : types.data?.destinations) || [], [types.data, kind])
-  const [type, setType] = useState(existing?.type || '')
+  const [typeChoice, setType] = useState(existing?.type || '')
+  // the first type is preselected (derived, so no effect is needed)
+  const type = typeChoice || list[0]?.type || ''
   const [name, setName] = useState(existing?.name || '')
   const [values, setValues] = useState<FormValues>({ config: existing?.config || {}, secrets: {} })
   const [paste, setPaste] = useState('')
   const [report, setReport] = useState<TestReport | null>(existing?.last_test_report || null)
   const [error, setError] = useState<unknown>(null)
   const [testedAt, setTestedAt] = useState<string | null>(existing?.last_tested_at || null)
-  useEffect(() => {
-    if (!type && list.length) setType(list[0].type)
-  }, [list, type])
   const ti = list.find((t) => t.type === type)
   const hint = me?.local_stack_hints?.[type]
 

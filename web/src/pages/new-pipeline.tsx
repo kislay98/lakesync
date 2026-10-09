@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -20,24 +20,22 @@ export default function NewPipeline({ embedded, onCreated }: { embedded?: boolea
   const [sp] = useSearchParams()
   const conns = useQuery({ queryKey: ['connections'], queryFn: () => endpoints.connections() })
   const settings = useQuery({ queryKey: ['settings'], queryFn: endpoints.settings })
-  const sources = conns.data?.filter((c) => c.kind === 'source') || []
-  const dests = conns.data?.filter((c) => c.kind === 'destination') || []
+  const sources = useMemo(() => conns.data?.filter((c) => c.kind === 'source') || [], [conns.data])
+  const dests = useMemo(() => conns.data?.filter((c) => c.kind === 'destination') || [], [conns.data])
   const [step, setStep] = useState(0)
-  const [sourceId, setSourceId] = useState(sp.get('source') || '')
-  const [destId, setDestId] = useState(sp.get('destination') || '')
+  const [sourceChoice, setSourceId] = useState(sp.get('source') || '')
+  const [destChoice, setDestId] = useState(sp.get('destination') || '')
   const [selected, setSelected] = useState<Record<string, Entity>>({})
   const [filter, setFilter] = useState('')
   const [name, setName] = useState('')
   const [namespace, setNamespace] = useState('')
   const [interval, setInterval_] = useState(0)
   const [start, setStart] = useState(true)
-  useEffect(() => {
-    if (!sourceId && sources.length === 1) setSourceId(sources[0].id)
-    if (!destId && dests.length === 1) setDestId(dests[0].id)
-  }, [sources, dests, sourceId, destId])
-  useEffect(() => {
-    if (settings.data && !interval) setInterval_(settings.data.general.default_sync_interval_s)
-  }, [settings.data, interval])
+  // a single source/destination is preselected (derived, so no effect is needed)
+  const sourceId = sourceChoice || (sources.length === 1 ? sources[0].id : '')
+  const destId = destChoice || (dests.length === 1 ? dests[0].id : '')
+  // the settings default applies until the user types a value
+  const intervalValue = interval || settings.data?.general.default_sync_interval_s || 0
   const entities = useQuery({ queryKey: ['entities', sourceId], queryFn: () => endpoints.entities(sourceId), enabled: !!sourceId && step >= 1 })
   const byDb = useMemo(() => {
     const m = new Map<string, Entity[]>()
@@ -57,7 +55,7 @@ export default function NewPipeline({ embedded, onCreated }: { embedded?: boolea
         source_id: sourceId,
         destination_id: destId,
         namespace: namespace || undefined,
-        sync_interval_s: interval,
+        sync_interval_s: intervalValue,
         start,
         collections: picked.map((e) => ({ collection: `${e.namespace}.${e.name}`, enabled: true, estimated_count: e.estimated_count })),
       }),
@@ -92,7 +90,7 @@ export default function NewPipeline({ embedded, onCreated }: { embedded?: boolea
       return n
     })
   }
-  const canNext = [!!sourceId && !!destId, picked.length > 0, interval >= minInterval, true][step]
+  const canNext = [!!sourceId && !!destId, picked.length > 0, intervalValue >= minInterval, true][step]
   const body = (
     <>
       <ol className="mb-5 flex items-center gap-2 text-xs">
@@ -206,7 +204,7 @@ export default function NewPipeline({ embedded, onCreated }: { embedded?: boolea
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="interval">Sync interval (seconds)</Label>
-            <Input id="interval" type="number" min={minInterval} value={interval || ''} onChange={(e) => setInterval_(Number(e.target.value))} />
+            <Input id="interval" type="number" min={minInterval} value={intervalValue || ''} onChange={(e) => setInterval_(Number(e.target.value))} />
             <p className="text-xs text-muted-foreground">Changes are committed and merged this often. Minimum {minInterval}s.</p>
           </div>
           <label className="flex items-start gap-2 rounded-md border p-3">
@@ -224,7 +222,7 @@ export default function NewPipeline({ embedded, onCreated }: { embedded?: boolea
           <Row k="Source" v={sources.find((c) => c.id === sourceId)?.name} />
           <Row k="Destination" v={dests.find((c) => c.id === destId)?.name} />
           <Row k="Namespace" v={<span className="font-mono">{namespace || defaultName()}</span>} />
-          <Row k="Sync interval" v={`${interval}s`} />
+          <Row k="Sync interval" v={`${intervalValue}s`} />
           <Row k="Collections" v={<span>{picked.map((e) => `${e.namespace}.${e.name}`).join(', ')}</span>} />
           <Row k="Estimated documents" v={formatCount(picked.reduce((a, e) => a + e.estimated_count, 0))} />
           <Row k="On create" v={start ? 'start syncing' : 'stay stopped'} />

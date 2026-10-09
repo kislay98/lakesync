@@ -447,7 +447,10 @@ type changeDoc struct {
 
 func (it *streamIter) Next(ctx context.Context) (*core.ChangeEvent, error) {
 	for {
-		if !it.cs.Next(ctx) {
+		// TryNext issues one getMore (bounded by maxAwaitTime) and returns when it
+		// is empty. The blocking Next would wrap the whole wait for an event in the
+		// client-level operation timeout, so an idle stream would fail every 2 minutes.
+		if !it.cs.TryNext(ctx) {
 			if err := it.cs.Err(); err != nil {
 				if ctx.Err() != nil {
 					return nil, ctx.Err()
@@ -457,7 +460,7 @@ func (it *streamIter) Next(ctx context.Context) (*core.ChangeEvent, error) {
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
 			}
-			continue // empty batch (maxAwaitTime elapsed)
+			continue // no event within maxAwaitTime
 		}
 		var ev changeDoc
 		if err := it.cs.Decode(&ev); err != nil {

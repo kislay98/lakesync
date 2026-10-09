@@ -47,17 +47,16 @@ func env(k, d string) string {
 }
 
 var (
-	binPath     = env("LAKESYNC_E2E_BIN", "../../bin/lakesync")
-	pgAdminURL  = env("LAKESYNC_E2E_PG_ADMIN", "postgres://lakesync:lakesync@localhost:5432/lakesync?sslmode=disable")
-	mongoURI    = env("LAKESYNC_E2E_MONGODB_URI", "mongodb://localhost:27017/?directConnection=true")
-	catalogURI  = env("LAKESYNC_E2E_CATALOG_URI", "http://localhost:19120/iceberg")
-	s3Endpoint  = env("LAKESYNC_E2E_S3_ENDPOINT", "http://localhost:9000")
-	s3Key       = env("LAKESYNC_E2E_S3_KEY", "lakesync")
-	s3Secret    = env("LAKESYNC_E2E_S3_SECRET", "lakesync-secret")
-	composeFile = env("LAKESYNC_E2E_COMPOSE_FILE", "../../deploy/local/docker-compose.yml")
-	secretKey   = "e2e0123456789abcdef0123456789abcdef0123456789abcdef0123456789abc"
-	adminEmail  = "e2e@example.com"
-	adminPass   = "e2e-password-123"
+	binPath    = env("LAKESYNC_E2E_BIN", "../../bin/lakesync")
+	pgAdminURL = env("LAKESYNC_E2E_PG_ADMIN", "postgres://lakesync:lakesync@localhost:5432/lakesync?sslmode=disable")
+	mongoURI   = env("LAKESYNC_E2E_MONGODB_URI", "mongodb://localhost:27017/?directConnection=true")
+	catalogURI = env("LAKESYNC_E2E_CATALOG_URI", "http://localhost:19120/iceberg")
+	s3Endpoint = env("LAKESYNC_E2E_S3_ENDPOINT", "http://localhost:9000")
+	s3Key      = env("LAKESYNC_E2E_S3_KEY", "lakesync")
+	s3Secret   = env("LAKESYNC_E2E_S3_SECRET", "lakesync-secret")
+	secretKey  = "e2e0123456789abcdef0123456789abcdef0123456789abcdef0123456789abc"
+	adminEmail = "e2e@example.com"
+	adminPass  = "e2e-password-123"
 )
 
 // app is one running lakesync process (serve or worker) with its own database.

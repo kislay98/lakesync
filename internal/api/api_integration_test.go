@@ -187,7 +187,7 @@ func TestIntegrationAPI(t *testing.T) {
 		t.Fatalf("create source: %d %v", st, m)
 	}
 	src := m["id"].(string)
-	st, m, raw = c.do("POST", "/api/pipelines", map[string]any{"name": "p", "source_id": src, "destination_id": id, "sync_interval_s": 5, "collections": []map[string]any{{"collection": "db.coll"}}})
+	st, _, raw = c.do("POST", "/api/pipelines", map[string]any{"name": "p", "source_id": src, "destination_id": id, "sync_interval_s": 5, "collections": []map[string]any{{"collection": "db.coll"}}})
 	if st != 400 {
 		t.Fatalf("interval below minimum accepted: %d %s", st, raw)
 	}
@@ -220,8 +220,7 @@ func TestIntegrationAPI(t *testing.T) {
 	if st != 200 || m["result"].(map[string]any)["row_count"].(float64) != 1 {
 		t.Fatalf("console select: %d %v", st, m)
 	}
-	st, m, _ = c.do("GET", "/api/query/history", nil)
-	if st != 200 || len(m) == 0 && false {
+	if st, _, _ := c.do("GET", "/api/query/history", nil); st != 200 {
 		t.Fatalf("history: %d", st)
 	}
 	// settings round trip
@@ -230,7 +229,7 @@ func TestIntegrationAPI(t *testing.T) {
 		t.Fatalf("settings: %d %v", st, m)
 	}
 	// openapi lists the routes we used
-	st, m, _ = c.do("GET", "/api/openapi.json", nil)
+	_, m, _ = c.do("GET", "/api/openapi.json", nil)
 	paths := m["paths"].(map[string]any)
 	for _, p := range []string{"/api/pipelines/{id}/pause", "/api/tables/{ns}/{table}/rows", "/api/query", "/api/events"} {
 		if paths[p] == nil {

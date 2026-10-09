@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -201,7 +201,7 @@ export default function PipelineDetail() {
 function CollectionRow({ p, c, onAction }: { p: Pipeline; c: PipelineCollection; onAction: (a: 'resync' | 'retry' | 'enable' | 'disable') => void }) {
   const copying = c.state === 'copying' || c.state === 'resyncing'
   const total = Math.max(c.snapshot_total_est, c.snapshot_done)
-  const lag = c.state === 'streaming' && c.last_source_ts ? (Date.now() - new Date(c.last_source_ts).getTime()) / 1000 : null
+  const lag = c.state === 'streaming' && c.last_source_ts && c.last_commit_at ? Math.max(0, (new Date(c.last_commit_at).getTime() - new Date(c.last_source_ts).getTime()) / 1000) : null
   const remaining = eta(c.snapshot_done, total, c.updated_at && copying ? null : null)
   const href = `/tables/${encodeURIComponent(p.namespace)}/${encodeURIComponent(c.clean_table)}?destination=${p.destination_id}`
   return (
@@ -231,7 +231,7 @@ function CollectionRow({ p, c, onAction }: { p: Pipeline; c: PipelineCollection;
             <div className="tabular-nums">{formatCount(c.last_seq)}</div>
           </div>
           <div>
-            <div className="text-muted-foreground">Merged</div>
+            <div className="text-muted-foreground">Merged seq</div>
             <div className="tabular-nums">{formatCount(c.merged_seq)}</div>
           </div>
           <div>
@@ -295,9 +295,13 @@ function Logs({ id, collections }: { id: string; collections: string[] }) {
   const [level, setLevel] = useState('info')
   const [collection, setCollection] = useState('')
   const [search, setSearch] = useState('')
-  const [live, setLive] = useState<LogEntry[]>([])
   const q = useQuery({ queryKey: ['logs', id, level, collection, search], queryFn: () => endpoints.logs(id, { level, collection, q: search, limit: 200 }) })
-  useEffect(() => setLive([]), [q.data])
+  return <LogList key={`${level}|${collection}|${search}|${q.dataUpdatedAt}`} id={id} level={level} collection={collection} search={search} setLevel={setLevel} setCollection={setCollection} setSearch={setSearch} collections={collections} base={q.data} loading={q.isLoading} />
+}
+
+/** Holds the live-appended lines; it is remounted whenever the base query refetches. */
+function LogList({ id, level, collection, search, setLevel, setCollection, setSearch, collections, base, loading }: { id: string; level: string; collection: string; search: string; setLevel: (v: string) => void; setCollection: (v: string) => void; setSearch: (v: string) => void; collections: string[]; base?: LogEntry[]; loading: boolean }) {
+  const [live, setLive] = useState<LogEntry[]>([])
   useLive(
     (e) => {
       if (e.type === 'log' && e.pipeline_id === id && e.data) {
@@ -314,13 +318,13 @@ function Logs({ id, collections }: { id: string; collections: string[] }) {
   const all = useMemo(() => {
     const seen = new Set<number>()
     const out: LogEntry[] = []
-    for (const l of [...live, ...(q.data || [])]) {
+    for (const l of [...live, ...(base || [])]) {
       if (seen.has(l.id)) continue
       seen.add(l.id)
       out.push(l)
     }
     return out
-  }, [live, q.data])
+  }, [live, base])
   const listRef = useRef<HTMLDivElement>(null)
   return (
     <div className="rounded-lg border bg-card">
@@ -358,8 +362,8 @@ function Logs({ id, collections }: { id: string; collections: string[] }) {
         </span>
       </div>
       <div ref={listRef} className="max-h-[420px] overflow-auto font-mono text-xs">
-        {q.isLoading ? <div className="p-4 text-muted-foreground">Loading…</div> : null}
-        {all.length === 0 && !q.isLoading ? <div className="p-6 text-center text-muted-foreground">No log lines match.</div> : null}
+        {loading ? <div className="p-4 text-muted-foreground">Loading…</div> : null}
+        {all.length === 0 && !loading ? <div className="p-6 text-center text-muted-foreground">No log lines match.</div> : null}
         {all.map((l) => (
           <div key={l.id} className="flex gap-3 border-b px-3 py-1.5 last:border-0 hover:bg-accent/40">
             <Tip label={exactTime(l.at)}>

@@ -104,10 +104,19 @@ One entry per decision: date, decision, alternatives, reason. Newest at the bott
 - **Reason:** The resync test needs a "history lost" error that a fresh replica set never produces naturally; the wrapper keeps the production binary free of test hooks unless explicitly enabled.
 
 ## 2026-10-09: Every MongoDB driver operation is bounded by a client-level timeout
-- **Decision:** The source's `mongo.Client` sets `SetTimeout(2m)`; the seed tool and the test clients set shorter ones. The driver applies it per cursor iteration (`Cursor.next` wraps each call), so long full copies are unaffected.
+- **Decision:** The source's `mongo.Client` sets `SetTimeout(2m)`; the seed tool and the test clients set shorter ones. The driver applies it per blocking call: each `Cursor.Next` of the full copy fetches at most one batch, and the change stream is read with `TryNext` (one `getMore` bounded by `maxAwaitTime`), because the blocking `Next` wraps its whole wait for an event in the timeout and an idle stream would fail every two minutes.
 - **Alternatives:** No timeout (driver default), per-call contexts only.
 - **Reason:** During the end-to-end runs a test client's insert hung forever on a silently dead connection. A bounded operation turns the same failure in the app into a transient error, which the runner retries from the last bookmark, instead of a pipeline that stalls without an error.
 
 ## 2026-10-09: End-to-end suites run strictly one at a time
 - **Decision:** `make e2e` runs the Go suites and then the Playwright suite; they are never run concurrently against the same MongoDB, and the setup spec filters for the seeded `shop` database.
 - **Reason:** A concurrent run let the UI's first-run flow pick a temporary database that another suite was dropping underneath it (which the app handled correctly, but the test could not pass).
+
+## 2026-10-09: A new pipeline that finds tables with another pipeline's checkpoint starts a fresh generation
+- **Decision:** When a pipeline that has never run opens raw tables that already carry a `lakesync.*` checkpoint (for example after a pipeline was deleted without dropping its tables, or when two pipelines are pointed at the same namespace), the runner keeps the data, starts generation N+1 with a full copy and rebuilds the clean table. A pipeline that *has* run resumes its own bookmark as before.
+- **Alternatives:** Resume the foreign bookmark (what happened before: the new pipeline replayed a `dropDatabase` that belonged to the previous pipeline's history and marked the collections removed); refuse to start and ask the user to drop the tables.
+- **Reason:** The bookmark belongs to a different pipeline's history, so resuming it can replay or skip events; a fresh generation is the same recovery the app uses for history loss, and nothing is deleted. The runner also reloads its collection row from the store at the start of every session, so a retry decides from what the previous session wrote (the first version of this rule fired twice because the retry still saw the original row).
+
+## 2026-10-09: At most two maintenance jobs run at once per process
+- **Decision:** Compaction, clean-table rewrites and the other maintenance jobs take a process-wide semaphore of two slots; scheduled and user-triggered jobs share it.
+- **Reason:** With four collections compacting at once the local RustFS returned `500 InternalError` on object reads (the SDK's three retries did not help). The jobs failed cleanly and ran on the next cycle, but serialising them is the cheaper fix; it also keeps a pipeline with many collections from reading every table at once.

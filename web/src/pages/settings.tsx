@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { endpoints, type Settings as SettingsT } from '@/lib/api'
@@ -12,21 +12,34 @@ import { useTheme } from '@/hooks/use-theme'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 export default function SettingsPage() {
-  const qc = useQueryClient()
   const q = useQuery({ queryKey: ['settings'], queryFn: endpoints.settings })
+  if (q.error)
+    return (
+      <Page>
+        <PageHeader title="Settings" />
+        <ErrorState error={q.error} onRetry={() => q.refetch()} />
+      </Page>
+    )
+  if (!q.data)
+    return (
+      <Page>
+        <PageHeader title="Settings" />
+        <ListSkeleton />
+      </Page>
+    )
+  // keyed by the fetch time so a refetch after saving re-initialises the form
+  return <SettingsForm key={q.dataUpdatedAt} data={q.data} />
+}
+
+function SettingsForm({ data }: { data: SettingsT }) {
+  const qc = useQueryClient()
   const { theme, setTheme } = useTheme()
-  const [general, setGeneral] = useState<SettingsT['general'] | null>(null)
-  const [maint, setMaint] = useState<SettingsT['maintenance'] | null>(null)
+  const [general, setGeneral] = useState(data.general)
+  const [maint, setMaint] = useState(data.maintenance)
   const [pw, setPw] = useState({ current: '', next: '', confirm: '' })
   const [pwErr, setPwErr] = useState<unknown>(null)
-  useEffect(() => {
-    if (q.data) {
-      setGeneral(q.data.general)
-      setMaint(q.data.maintenance)
-    }
-  }, [q.data])
   const save = useMutation({
-    mutationFn: () => endpoints.updateSettings({ general: general!, maintenance: maint! }),
+    mutationFn: () => endpoints.updateSettings({ general, maintenance: maint }),
     onSuccess: () => {
       toast.success('Settings saved')
       qc.invalidateQueries({ queryKey: ['settings'] })
@@ -42,21 +55,7 @@ export default function SettingsPage() {
     },
     onError: setPwErr,
   })
-  if (q.isLoading || !general || !maint)
-    return (
-      <Page>
-        <PageHeader title="Settings" />
-        <ListSkeleton />
-      </Page>
-    )
-  if (q.error)
-    return (
-      <Page>
-        <PageHeader title="Settings" />
-        <ErrorState error={q.error} onRetry={() => q.refetch()} />
-      </Page>
-    )
-  const a = q.data!.about
+  const a = data.about
   const num = (label: string, key: keyof SettingsT['maintenance'], help: string) => (
     <div className="space-y-1">
       <Label htmlFor={key}>{label}</Label>
@@ -96,8 +95,8 @@ export default function SettingsPage() {
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1">
               <Label htmlFor="dsi">Default sync interval (seconds)</Label>
-              <Input id="dsi" type="number" min={q.data!.limits.min_sync_interval_s} value={general.default_sync_interval_s} onChange={(e) => setGeneral({ default_sync_interval_s: Number(e.target.value) })} />
-              <p className="text-[11px] text-muted-foreground">Minimum {q.data!.limits.min_sync_interval_s}s (server setting MIN_SYNC_INTERVAL_S).</p>
+              <Input id="dsi" type="number" min={data.limits.min_sync_interval_s} value={general.default_sync_interval_s} onChange={(e) => setGeneral({ default_sync_interval_s: Number(e.target.value) })} />
+              <p className="text-[11px] text-muted-foreground">Minimum {data.limits.min_sync_interval_s}s (server setting MIN_SYNC_INTERVAL_S).</p>
             </div>
           </CardContent>
         </Card>
@@ -169,7 +168,7 @@ export default function SettingsPage() {
               <dt className="text-muted-foreground">Private endpoints</dt>
               <dd>{a.private_allowed ? 'allowed' : 'blocked (ALLOW_PRIVATE_ENDPOINTS=false)'}</dd>
               <dt className="text-muted-foreground">SQL console</dt>
-              <dd>read-only · {q.data!.limits.query_row_limit.toLocaleString()} rows · {q.data!.limits.query_timeout_s}s timeout</dd>
+              <dd>read-only · {data.limits.query_row_limit.toLocaleString()} rows · {data.limits.query_timeout_s}s timeout</dd>
             </dl>
           </CardContent>
         </Card>
