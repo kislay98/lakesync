@@ -130,9 +130,19 @@ export default function PipelineDetail() {
       <div className="grid gap-3 md:grid-cols-4">
         <Stat label="Rows synced" value={formatCount(p.stats.rows_synced)} />
         <Stat label="Events, last hour" value={formatCount(p.stats.events_last_hour)} sub={<span className="text-primary"><Sparkline values={(series.data || []).map((m) => m.events)} width={160} height={24} /></span>} />
-        <Stat label="Lag" value={p.stats.lag_seconds == null ? '–' : formatSeconds(p.stats.lag_seconds)} sub="now minus source time of the last applied event" />
+        <Stat label="Lag" value={p.stats.lag_seconds == null ? '–' : formatSeconds(p.stats.lag_seconds)} sub="delay between a change in MongoDB and its commit" />
         <Stat label="Last commit" value={relativeTime(p.collections.map((c) => c.last_commit_at).filter(Boolean).sort().pop() || null)} />
       </div>
+      {p.oplog && !p.oplog.error ? (
+        <div className={cn('mt-3 flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 text-xs', p.oplog.warning ? 'border-warning/60 bg-warning/10' : 'text-muted-foreground')}>
+          {p.oplog.warning ? <AlertTriangle className="h-3.5 w-3.5 text-warning" /> : null}
+          <span>
+            MongoDB keeps about <span className="font-medium text-foreground">{formatSeconds(p.oplog.window_seconds)}</span> of change history{p.oplog.size_bytes ? ` (${formatBytes(p.oplog.size_bytes)} oplog)` : ''}; a pause or outage longer than that forces a full resync.
+          </span>
+          {p.oplog.paused_seconds ? <span>Bookmark idle for {formatSeconds(p.oplog.paused_seconds)}.</span> : null}
+          {p.oplog.warning ? <span className="font-medium text-warning">{p.oplog.warning}</span> : null}
+        </div>
+      ) : null}
       <section className="mt-6">
         <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Collections</h2>
         <div className="divide-y rounded-lg border bg-card">

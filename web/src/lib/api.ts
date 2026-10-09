@@ -166,6 +166,7 @@ export interface Pipeline {
   destination: { id: string; name: string; type: string }
   collections: PipelineCollection[]
   stats: { rows_synced: number; events_last_hour: number; lag_seconds: number | null; collections: number; attention: string[] }
+  oplog?: { window_seconds: number; oldest: string; newest: string; size_bytes?: number; warning?: string; paused_seconds?: number; error?: string } | null
 }
 
 export interface Run {
@@ -300,6 +301,24 @@ export interface SnapshotInfo {
   is_current: boolean
 }
 
+export interface TypeShare {
+  type: string
+  count: number
+  percent: number
+  first_seen: string | null
+  last_seen: string | null
+  sample: string
+}
+
+export interface FieldDrift {
+  field: string
+  documents: number
+  types: TypeShare[]
+  first_seen: string | null
+  last_seen: string | null
+  conflicts: { key: string; seq: number; value: string }[]
+}
+
 export interface QueryResult {
   columns: ColumnMeta[]
   rows: unknown[][]
@@ -400,6 +419,7 @@ export const endpoints = {
   },
   tableHealth: (ns: string, table: string, dest?: string) => api<TableHealth>(`/api/tables/${enc(ns)}/${enc(table)}/health${dest ? `?destination=${dest}` : ''}`),
   tableSnapshots: (ns: string, table: string, dest?: string) => api<SnapshotInfo[]>(`/api/tables/${enc(ns)}/${enc(table)}/snapshots${dest ? `?destination=${dest}` : ''}`),
+  tableDrift: (ns: string, table: string, dest?: string) => api<{ raw_table: string; fields: FieldDrift[] }>(`/api/tables/${enc(ns)}/${enc(table)}/drift${dest ? `?destination=${dest}` : ''}`),
   history: (ns: string, table: string, key: string, dest?: string) => api<{ key: string; raw_table: string; events: HistoryEvent[] }>(`/api/tables/${enc(ns)}/${enc(table)}/keys/${enc(key)}/history${dest ? `?destination=${dest}` : ''}`),
   maintenance: (ns: string, table: string, dest?: string) => api<{ queued: boolean; message?: string; results?: unknown[]; errors?: string[] }>(`/api/tables/${enc(ns)}/${enc(table)}/maintenance${dest ? `?destination=${dest}` : ''}`, { method: 'POST' }),
   query: (destination_id: string, sql: string) => api<{ result: QueryResult; row_limit: number; read_only: boolean }>('/api/query', { method: 'POST', json: { destination_id, sql } }),

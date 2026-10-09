@@ -65,7 +65,7 @@ export default function Overview() {
       <div className="grid gap-3 md:grid-cols-4">
         <Stat label="Rows synced" value={formatCount(d.totals.rows_synced)} sub="events written to raw tables" />
         <Stat label="Events, last hour" value={formatCount(d.totals.events_last_hour)} />
-        <Stat label="Current lag" value={d.totals.lag_seconds == null ? '–' : formatSeconds(d.totals.lag_seconds)} sub="now minus source time of the last applied event" />
+        <Stat label="Current lag" value={d.totals.lag_seconds == null ? '–' : formatSeconds(d.totals.lag_seconds)} sub="delay between a change in MongoDB and its commit" />
         <Stat label="Needs attention" value={d.totals.attention} sub={d.totals.attention ? 'see below' : 'all clear'} className={d.totals.attention ? 'border-warning/50' : ''} />
       </div>
       {d.attention.length ? (

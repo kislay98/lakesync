@@ -47,6 +47,7 @@ type Server struct {
 
 	tableCache   map[string]cachedTables
 	tableCacheMu sync.Mutex
+	oplogCache   map[string]oplogCacheEntry
 }
 
 // Deps are the server's collaborators.
@@ -169,6 +170,7 @@ func (s *Server) registerRoutes() {
 	s.handle("GET", "/api/tables/{ns}/{table}/rows", "tables", "Rows with server-side paging, sorting, filtering and search", s.tableRows)
 	s.handle("GET", "/api/tables/{ns}/{table}/health", "tables", "File, snapshot and size metrics with a health verdict", s.tableHealth)
 	s.handle("GET", "/api/tables/{ns}/{table}/snapshots", "tables", "Snapshot list", s.tableSnapshots)
+	s.handle("GET", "/api/tables/{ns}/{table}/drift", "tables", "Schema drift: types seen per field, first and last seen, conflict samples", s.tableDrift)
 	s.handle("GET", "/api/tables/{ns}/{table}/keys/{key}/history", "tables", "Every raw event of one document, newest first, with diffs", s.keyHistory)
 	s.handle("POST", "/api/tables/{ns}/{table}/maintenance", "tables", "Run maintenance now", s.runMaintenance)
 	// query

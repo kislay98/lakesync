@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"time"
 
 	"lakesync/internal/core"
 )
@@ -115,4 +116,20 @@ func Open(ctx context.Context, typ string, config map[string]any, secrets map[st
 		return nil, err
 	}
 	return d.New(ctx, config, secrets)
+}
+
+// OplogInfo describes how far back a source can resume from (stretch goal S4).
+type OplogInfo struct {
+	// WindowSeconds is the time span the source keeps change history for; a pause
+	// longer than this forces a resync.
+	WindowSeconds float64   `json:"window_seconds"`
+	Oldest        time.Time `json:"oldest"`
+	Newest        time.Time `json:"newest"`
+	SizeBytes     int64     `json:"size_bytes,omitempty"`
+}
+
+// OplogReporter is implemented by sources that can estimate their change
+// history window when the user's privileges allow it.
+type OplogReporter interface {
+	OplogInfo(ctx context.Context) (*OplogInfo, error)
 }

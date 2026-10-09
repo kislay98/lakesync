@@ -12,6 +12,7 @@ import (
 	"lakesync/internal/conn"
 	"lakesync/internal/core"
 	"lakesync/internal/core/engine"
+	"lakesync/internal/source"
 	"lakesync/internal/store"
 )
 
@@ -21,6 +22,91 @@ type pipelineView struct {
 	Destination connRef                     `json:"destination"`
 	Collections []*store.PipelineCollection `json:"collections"`
 	Stats       pipelineStats               `json:"stats"`
+	Oplog       *oplogView                  `json:"oplog,omitempty"`
+}
+
+// oplogView is stretch goal S4: how long the source keeps history, and how much
+// of it a pause has used.
+type oplogView struct {
+	WindowSeconds float64 `json:"window_seconds"`
+	Oldest        string  `json:"oldest"`
+	Newest        string  `json:"newest"`
+	SizeBytes     int64   `json:"size_bytes,omitempty"`
+	// Warning is set when a pause or outage is close to forcing a resync.
+	Warning string `json:"warning,omitempty"`
+	// PausedSeconds is how long the oldest bookmark has been idle (paused pipelines).
+	PausedSeconds float64 `json:"paused_seconds,omitempty"`
+	Error         string  `json:"error,omitempty"`
+}
+
+type oplogCacheEntry struct {
+	at   time.Time
+	info *source.OplogInfo
+	err  error
+}
+
+// oplogInfo returns the source's change-history window, cached per source for a minute.
+func (s *Server) oplogInfo(ctx context.Context, sourceID string) (*source.OplogInfo, error) {
+	s.tableCacheMu.Lock()
+	e, ok := s.oplogCache[sourceID]
+	s.tableCacheMu.Unlock()
+	if ok && time.Since(e.at) < time.Minute {
+		return e.info, e.err
+	}
+	var info *source.OplogInfo
+	c, err := s.st.GetConnection(ctx, sourceID)
+	if err == nil {
+		var src source.Source
+		src, err = conn.OpenSource(ctx, s.sec, c)
+		if err == nil {
+			if rep, ok := src.(source.OplogReporter); ok {
+				octx, cancel := context.WithTimeout(ctx, 10*time.Second)
+				info, err = rep.OplogInfo(octx)
+				cancel()
+			} else {
+				err = errors.New("this source does not report a history window")
+			}
+			_ = src.Close()
+		}
+	}
+	s.tableCacheMu.Lock()
+	if s.oplogCache == nil {
+		s.oplogCache = map[string]oplogCacheEntry{}
+	}
+	s.oplogCache[sourceID] = oplogCacheEntry{at: time.Now(), info: info, err: err}
+	s.tableCacheMu.Unlock()
+	return info, err
+}
+
+func (s *Server) oplogView(ctx context.Context, p *store.Pipeline, cols []*store.PipelineCollection) *oplogView {
+	info, err := s.oplogInfo(ctx, p.SourceID)
+	if err != nil {
+		return &oplogView{Error: core.RedactURI(err.Error())}
+	}
+	v := &oplogView{WindowSeconds: info.WindowSeconds, Oldest: info.Oldest.Format(time.RFC3339), Newest: info.Newest.Format(time.RFC3339), SizeBytes: info.SizeBytes}
+	// how old is the oldest bookmark we would resume from?
+	var oldest time.Time
+	for _, c := range cols {
+		if !c.Enabled || c.LastSourceTS == nil {
+			continue
+		}
+		if c.State == store.StatePaused || c.State == store.StateStopped || c.State == store.StateFailed || p.DesiredState != store.DesiredRunning {
+			if oldest.IsZero() || c.LastSourceTS.Before(oldest) {
+				oldest = *c.LastSourceTS
+			}
+		}
+	}
+	if !oldest.IsZero() {
+		v.PausedSeconds = time.Since(oldest).Seconds()
+		remaining := info.WindowSeconds - v.PausedSeconds
+		switch {
+		case remaining <= 0:
+			v.Warning = "The bookmark is older than the oplog window; resuming will trigger a full resync."
+		case remaining < info.WindowSeconds*0.25:
+			v.Warning = fmt.Sprintf("Resume within %s or the bookmark falls out of the oplog and a full resync is needed.", (time.Duration(remaining) * time.Second).Round(time.Minute))
+		}
+	}
+	return v
 }
 
 type connRef struct {
@@ -53,6 +139,7 @@ func (s *Server) pipelineView(ctx context.Context, p *store.Pipeline) (*pipeline
 		v.Destination = connRef{c.ID, c.Name, c.Type}
 	}
 	v.Stats = s.stats(ctx, p, cols)
+	v.Oplog = s.oplogView(ctx, p, cols)
 	return v, nil
 }
 

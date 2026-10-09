@@ -400,6 +400,38 @@ func (s *Server) tableSnapshots(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, 200, snaps)
 }
 
+// tableDrift serves stretch goal S3: per-field types across documents.
+func (s *Server) tableDrift(w http.ResponseWriter, r *http.Request) {
+	ns, table := r.PathValue("ns"), r.PathValue("table")
+	dc, _, pc, err := s.destinationFor(r.Context(), r, ns, table)
+	if err != nil {
+		s.badRequest(w, err.Error(), "")
+		return
+	}
+	raw := table
+	if pc != nil {
+		raw = pc.RawTable
+	} else if !strings.HasSuffix(table, core.RawSuffix) {
+		raw = table + core.RawSuffix
+	}
+	alias, err := conn.Attach(r.Context(), s.q, s.sec, dc)
+	if err != nil {
+		s.writeError(w, http.StatusBadGateway, "destination_error", core.RedactURI(err.Error()), "")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 2*s.cfg.QueryTimeout)
+	defer cancel()
+	drift, err := s.q.SchemaDrift(ctx, alias, ns, raw, 500)
+	if err != nil {
+		s.writeError(w, http.StatusBadGateway, "query_error", core.RedactURI(err.Error()), "")
+		return
+	}
+	if drift == nil {
+		drift = []query.FieldDrift{}
+	}
+	s.writeJSON(w, 200, map[string]any{"raw_table": raw, "fields": drift})
+}
+
 func (s *Server) keyHistory(w http.ResponseWriter, r *http.Request) {
 	ns, table := r.PathValue("ns"), r.PathValue("table")
 	key, err := url.PathUnescape(r.PathValue("key"))

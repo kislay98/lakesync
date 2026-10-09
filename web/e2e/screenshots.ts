@@ -61,6 +61,11 @@ test('capture every screen', async ({ page }) => {
     await page.waitForSelector('text=Table health')
     await page.waitForTimeout(1200)
     await shot(page, 'table-health')
+    await page.getByRole('button', { name: 'Analyse fields' }).click()
+    await page.waitForSelector('text=Types seen', { timeout: 60000 })
+    await page.waitForTimeout(800)
+    await page.getByText('Schema drift').scrollIntoViewIfNeeded()
+    await shot(page, 'schema-drift')
   }
   await page.goto('/sql')
   await page.waitForSelector('h1')

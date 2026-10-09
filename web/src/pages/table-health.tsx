@@ -11,6 +11,8 @@ import { HealthBadge } from '@/components/status-badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tip } from '@/components/ui/tooltip'
 import { cn, exactTime, formatBytes, formatCount, relativeTime } from '@/lib/utils'
+import { useState } from 'react'
+import { Skeleton } from '@/components/ui/misc'
 
 export default function TableHealthPage() {
   const { ns = '', table = '' } = useParams()
@@ -171,6 +173,7 @@ export default function TableHealthPage() {
             )}
           </CardContent>
         </Card>
+        <DriftCard ns={ns} table={table} dest={dest} />
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Snapshots</CardTitle>
@@ -212,5 +215,101 @@ export default function TableHealthPage() {
         </Card>
       </div>
     </Page>
+  )
+}
+
+const typeColors: Record<string, string> = {
+  string: 'bg-success/70',
+  int: 'bg-info/70',
+  double: 'bg-info/50',
+  bool: 'bg-warning/70',
+  date: 'bg-primary/70',
+  object: 'bg-muted-foreground/50',
+  array: 'bg-muted-foreground/35',
+  null: 'bg-border',
+  decimal: 'bg-info/35',
+  objectId: 'bg-primary/40',
+}
+
+/** Stretch goal S3: per-field types seen across documents, with percentages, first/last seen and conflict samples. */
+function DriftCard({ ns, table, dest }: { ns: string; table: string; dest?: string }) {
+  const [open, setOpen] = useState(false)
+  const q = useQuery({ queryKey: ['drift', ns, table, dest], queryFn: () => endpoints.tableDrift(ns, table, dest), enabled: open })
+  return (
+    <Card className="lg:col-span-2">
+      <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
+        <div>
+          <CardTitle>Schema drift</CardTitle>
+          <CardDescription>Which types each field has taken across the latest version of every document, computed from the raw change log.</CardDescription>
+        </div>
+        {!open ? (
+          <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+            Analyse fields
+          </Button>
+        ) : null}
+      </CardHeader>
+      {open ? (
+        <CardContent>
+          {q.isLoading ? <Skeleton className="h-24 w-full" /> : q.error ? <div className="text-xs text-destructive">{(q.error as Error).message}</div> : null}
+          {q.data ? (
+            <table className="w-full text-xs">
+              <thead className="text-muted-foreground">
+                <tr>
+                  <th className="py-1 text-left font-medium">Field</th>
+                  <th className="py-1 text-left font-medium">Types seen</th>
+                  <th className="py-1 text-right font-medium">Documents</th>
+                  <th className="py-1 text-left font-medium">First seen</th>
+                  <th className="py-1 text-left font-medium">Last seen</th>
+                  <th className="py-1 text-left font-medium">Conflict samples</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {q.data.fields.map((f) => (
+                  <tr key={f.field} className={cn(f.types.length > 1 && 'bg-warning/8')}>
+                    <td className="py-1.5 pr-2 font-mono align-top">{f.field}</td>
+                    <td className="py-1.5 pr-2 align-top">
+                      <div className="flex h-2 w-44 overflow-hidden rounded-full bg-muted" title={f.types.map((t) => `${t.type} ${t.percent.toFixed(1)}%`).join(', ')}>
+                        {f.types.map((t) => (
+                          <div key={t.type} className={cn('h-full', typeColors[t.type] || 'bg-foreground/40')} style={{ width: `${t.percent}%` }} />
+                        ))}
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px]">
+                        {f.types.map((t) => (
+                          <span key={t.type} className="inline-flex items-center gap-1">
+                            <span className={cn('inline-block h-2 w-2 rounded-full', typeColors[t.type] || 'bg-foreground/40')} />
+                            {t.type} <span className="text-muted-foreground">{t.percent.toFixed(t.percent < 10 ? 1 : 0)}%</span>
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="py-1.5 pr-2 text-right tabular-nums align-top">{formatCount(f.documents)}</td>
+                    <td className="py-1.5 pr-2 align-top text-muted-foreground" title={exactTime(f.first_seen)}>
+                      {relativeTime(f.first_seen)}
+                    </td>
+                    <td className="py-1.5 pr-2 align-top text-muted-foreground" title={exactTime(f.last_seen)}>
+                      {relativeTime(f.last_seen)}
+                    </td>
+                    <td className="py-1.5 align-top font-mono text-[11px] text-warning">
+                      {f.conflicts.map((c) => (
+                        <div key={`${c.key}-${c.seq}`} className="truncate" title={`${c.key} seq ${c.seq}`}>
+                          {c.value}
+                        </div>
+                      ))}
+                    </td>
+                  </tr>
+                ))}
+                {q.data.fields.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-3 text-center text-muted-foreground">
+                      No documents in the raw table yet.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          ) : null}
+        </CardContent>
+      ) : null}
+    </Card>
   )
 }

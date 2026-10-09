@@ -56,6 +56,7 @@ type runner struct {
 	failures           []time.Time
 	lastCommitAt       time.Time
 	lastCommitSourceTS time.Time
+	resyncOnStart      bool
 	maintCfg           dest.MaintenanceConfig
 	mu                 sync.Mutex
 	lastNotify         time.Time
@@ -139,6 +140,11 @@ func (r *runner) run(parent context.Context) {
 	ctx, cancel := context.WithCancel(parent)
 	r.ctx, r.cancel = ctx, cancel
 	defer cancel()
+	// a resync requested while the runner was not running (failed, source removed,
+	// paused) starts a new generation instead of resuming the old bookmark
+	if r.c.RequestedAction != nil && *r.c.RequestedAction == actionResync {
+		r.resyncOnStart = true
+	}
 	empty := ""
 	r.update(ctx, store.CollectionUpdate{RequestedAction: &empty})
 	if r.c.State == store.StateFailed || r.c.State == store.StatePaused || r.c.State == store.StateStopped {
@@ -242,6 +248,12 @@ func (r *runner) session(ctx context.Context) error {
 	}
 	if cp == nil {
 		if err := r.initialize(ctx, max(r.c.Generation, 1), "initial copy"); err != nil {
+			return err
+		}
+	} else if r.resyncOnStart {
+		r.resyncOnStart = false
+		r.cp = *cp
+		if err := r.initialize(ctx, cp.Generation+1, "requested by the user"); err != nil {
 			return err
 		}
 	} else {
@@ -357,6 +369,7 @@ func (r *runner) initialize(ctx context.Context, gen int64, reason string) error
 		return fmt.Errorf("write checkpoint: %w", err)
 	}
 	zero := int64(0)
+	r.c.SnapshotDone = 0
 	r.update(ctx, store.CollectionUpdate{Generation: &gen, SnapshotDone: &zero, LastSeq: &seq, Schema: jsonRaw(schema)})
 	return nil
 }
@@ -401,7 +414,9 @@ func (r *runner) fullCopy(ctx context.Context) error {
 	defer it.Close()
 	b := newBatcher(r)
 	var copied, bytes int64
-	copied = r.c.SnapshotDone
+	if r.cp.SnapshotCursor != "" {
+		copied = r.c.SnapshotDone // resuming a copy after a restart
+	}
 	flush := func(last bool) error {
 		if b.empty() && !last {
 			return nil

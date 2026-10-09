@@ -122,8 +122,16 @@ func (w *Worker) reconcile(ctx context.Context) {
 			continue
 		}
 		k := key(c.PipelineID, c.Collection)
-		shouldRun := p.DesiredState == store.DesiredRunning && c.Enabled && c.State != store.StateSourceRemoved
-		if c.State == store.StateFailed && (c.RequestedAction == nil || *c.RequestedAction != actionRetry) {
+		requested := ""
+		if c.RequestedAction != nil {
+			requested = *c.RequestedAction
+		}
+		shouldRun := p.DesiredState == store.DesiredRunning && c.Enabled
+		// terminal states stay put until the user asks for a retry or a resync
+		if c.State == store.StateSourceRemoved && requested != actionResync {
+			shouldRun = false
+		}
+		if c.State == store.StateFailed && requested != actionRetry && requested != actionResync {
 			shouldRun = false
 		}
 		if shouldRun {

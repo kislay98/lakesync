@@ -125,6 +125,21 @@ func TestIntegrationCatalog(t *testing.T) {
 	if ac, err := e.Autocomplete(ctx, alias); err != nil || len(ac) < 2 {
 		t.Fatalf("autocomplete: %v %v", ac, err)
 	}
+	// schema drift over the latest document versions
+	drift, err := e.SchemaDrift(ctx, alias, ns, "t__raw", 50)
+	if err != nil {
+		t.Fatalf("drift: %v", err)
+	}
+	found := map[string]FieldDrift{}
+	for _, d := range drift {
+		found[d.Field] = d
+	}
+	if q := found["qty"]; q.Documents != 4 || len(q.Types) != 1 || q.Types[0].Type != "int" || q.Types[0].Percent != 100 {
+		t.Fatalf("drift qty: %+v", q)
+	}
+	if n := found["name"]; n.FirstSeen == nil || n.LastSeen == nil || n.Types[0].Type != "string" {
+		t.Fatalf("drift name: %+v", n)
+	}
 	// generation 2 rebuild drops gen-1 rows that were not copied again
 	exec(fmt.Sprintf("INSERT INTO %s VALUES ('k1', 8, 2, now(), now(), NULL, 'k1', 'name 1', 10, NULL, 'r', '{}'), ('k9', 9, 2, now(), now(), NULL, 'k9', 'name 9', 90, NULL, 'r', '{}')", qualified(alias, ns, "t__raw")))
 	rb, err := e.RebuildClean(ctx, alias, ns, "t__raw", "t", 2)
