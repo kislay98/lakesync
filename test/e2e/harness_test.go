@@ -497,3 +497,47 @@ func randomSleep(min, max time.Duration) {
 }
 
 func freePort(base int) int { return base + rand.Intn(500) }
+
+// waitMaintenance waits until a run of every given kind for the collection, started
+// after since, has finished; a failed run fails the test with its error.
+func (a *app) waitMaintenance(pipelineID, collection string, since time.Time, timeout time.Duration, kinds ...string) {
+	deadline := time.Now().Add(timeout)
+	for {
+		var runs []struct {
+			Collection string     `json:"collection"`
+			Kind       string     `json:"kind"`
+			StartedAt  time.Time  `json:"started_at"`
+			EndedAt    *time.Time `json:"ended_at"`
+			Status     string     `json:"status"`
+			Error      *string    `json:"error"`
+		}
+		a.call("GET", "/api/pipelines/"+pipelineID+"/runs?limit=200", nil, &runs)
+		done := map[string]bool{}
+		for _, r := range runs {
+			if r.Collection != collection || r.StartedAt.Before(since) || r.EndedAt == nil {
+				continue
+			}
+			if r.Status == "failed" {
+				msg := ""
+				if r.Error != nil {
+					msg = *r.Error
+				}
+				a.t.Fatalf("maintenance %s on %s failed: %s", r.Kind, collection, msg)
+			}
+			done[r.Kind] = true
+		}
+		all := true
+		for _, k := range kinds {
+			if !done[k] {
+				all = false
+			}
+		}
+		if all {
+			return
+		}
+		if time.Now().After(deadline) {
+			a.t.Fatalf("timed out waiting for maintenance %v on %s; log tail:\n%s", kinds, collection, a.logTail(30))
+		}
+		time.Sleep(3 * time.Second)
+	}
+}

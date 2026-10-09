@@ -52,8 +52,19 @@ services:
     ports:
       - "9000:9000"
       - "9001:9001"
+    # RustFS keeps up to 512 descriptors open per disk and logs an error for every
+    # failed accept; the Docker default of 1024 ends in HTTP 500s and a runaway log.
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     volumes:
       - s3-data:/data
+      # its own log file; bounded so a logging storm cannot fill the disk
+      - type: tmpfs
+        target: /logs
+        tmpfs:
+          size: 134217728
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:9000/health/live || curl -sf http://localhost:9000/ -o /dev/null -w '%{http_code}' | grep -qE '^(200|403)$'"]
       interval: 3s

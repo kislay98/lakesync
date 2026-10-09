@@ -92,3 +92,11 @@ Lakekeeper keeps `gc.enabled` on, so snapshot expiry and orphan cleanup run in l
 
 If it serves `/v1/config`, `/v1/namespaces` and the table endpoints, it should work. Run the
 connection test; each failing step names the cause.
+
+## Self-hosted object stores
+
+Give the store enough file descriptors. RustFS keeps up to 512 descriptors open per disk and
+MinIO-style servers behave the same; with Docker's default limit of 1,024 the server answers
+`500 InternalError` under concurrent reads (compaction, the viewer on large tables) and logs
+the failure in a loop. The local compose file sets `ulimits.nofile` to 65,536 for this reason.
+

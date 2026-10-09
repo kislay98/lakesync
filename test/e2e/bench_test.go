@@ -180,10 +180,14 @@ func TestBenchmark(t *testing.T) {
 		logf("5. %s after ~%d commits at a 5 s interval: %d data files (%d small), %d delete files, %d snapshots visible through the catalog, %d bytes", tbl, commits, f, s, d, n, b)
 	}
 	logf("   extrapolation: 24 h at a 60 s interval is 1,440 commits; without maintenance each commit adds one data file per partition day (raw) and one delete file plus one data file per merge that changed rows (clean)")
+	posted := time.Now().Add(-2 * time.Second)
 	st, body := a.call("POST", fmt.Sprintf("/api/tables/%s/events/maintenance?destination=%s", p.Namespace, dst), nil, nil)
 	if st != 200 && st != 202 {
 		t.Fatalf("maintenance: %d %s", st, body)
 	}
+	// the runner holds the collection lock, so the request is queued and runs after the
+	// current batch: wait for both compaction jobs to finish (or fail)
+	a.waitMaintenance(p.ID, db+".events", posted, 20*time.Minute, "compact_raw", "rewrite_clean")
 	for _, tbl := range []string{"events__raw", "events"} {
 		f, s, d, n, b := health(tbl)
 		logf("5. %s after maintenance: %d data files (%d small), %d delete files, %d snapshots, %d bytes", tbl, f, s, d, n, b)

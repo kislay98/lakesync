@@ -120,3 +120,7 @@ One entry per decision: date, decision, alternatives, reason. Newest at the bott
 ## 2026-10-09: At most two maintenance jobs run at once per process
 - **Decision:** Compaction, clean-table rewrites and the other maintenance jobs take a process-wide semaphore of two slots; scheduled and user-triggered jobs share it.
 - **Reason:** With four collections compacting at once the local RustFS returned `500 InternalError` on object reads (the SDK's three retries did not help). The jobs failed cleanly and ran on the next cycle, but serialising them is the cheaper fix; it also keeps a pipeline with many collections from reading every table at once.
+
+## 2026-10-09: RustFS runs with a 65,536 file-descriptor limit and a bounded log directory
+- **Decision:** The local compose file sets `ulimits.nofile` to 65,536 on the `s3` service and mounts its `/logs` directory on a 128 MB tmpfs (the single-VM deployment uses an external object store, so nothing changes there; `docs/destinations.md` carries the same advice for self-hosted stores).
+- **Reason:** The "object store returned 500" failures seen during maintenance and the benchmark's final verify had one cause: RustFS keeps up to 512 descriptors open per disk, the Docker default limit is 1,024, and once the accept loop failed with `No file descriptors available` every request answered 500 and RustFS logged the failure in a loop (26 GB in the container's writable layer within an hour). The limit removes the trigger; the tmpfs bounds the damage if it ever happens again.

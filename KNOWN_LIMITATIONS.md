@@ -23,9 +23,9 @@ Stated plainly. Each entry says what is missing, why, and what would unblock it.
 ## Destinations other than Nessie + RustFS were not tested
 - **What:** Cloudflare R2 Data Catalog, Apache Polaris and Lakekeeper settings in `docs/destinations.md` come from their documentation.
 
-## The object store can fail a maintenance job
-- **What:** On the local stack, RustFS occasionally answered object reads with `500 InternalError` while several tables were compacted at the same time. The job fails with that error in the run history and the pipeline keeps streaming; the next maintenance cycle (or the Table health button) runs it again.
-- **Unblock:** Maintenance concurrency is capped at two jobs per process; raise the maintenance interval if the store is slow.
+## A failing object store fails maintenance jobs, not the pipeline
+- **What:** When the object store answers reads with errors (seen on the local RustFS before its file-descriptor limit was raised, see `DECISIONS.md`), the maintenance job fails with that error in the run history and the pipeline keeps streaming; the next maintenance cycle (or the Table health button) runs it again. Maintenance concurrency is capped at two jobs per process.
+- **Unblock:** Give the object store enough file descriptors (the compose files set 65,536) and raise the maintenance interval if the store is slow.
 
 ## The containerised test runner is untested
 - **What:** `Dockerfile.e2e` and `make e2e-container` (the suites run from inside the compose network) were written but never exercised; the image build was too slow on the build machine. The suites were run from the host with `make e2e`.

@@ -96,8 +96,10 @@ All decisions are logged with alternatives and reasons in `DECISIONS.md`.
 ## Known limitations
 
 See `KNOWN_LIMITATIONS.md`: Atlas untested live, SigV4 catalogs unsupported, other catalogs
-documented but untested, Nessie snapshot history, delete-file accumulation until maintenance,
-single-column sort, stretch goals S1/S2/S5 not implemented.
+documented but untested, Nessie snapshot history and GC, delete-file accumulation until
+maintenance, occasional object-store errors failing a maintenance job (retried on the next
+cycle), the containerised test runner untested, single-column sort, stretch goals S1/S2/S5 not
+implemented.
 
 ## Stretch goals
 
