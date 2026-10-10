@@ -91,4 +91,4 @@ Health: `GET /healthz`, `GET /readyz`. Metrics: `GET /metrics` (Prometheus). API
 ## Status
 
 See [`docs/FINAL_REPORT.md`](docs/FINAL_REPORT.md) for the acceptance checklist with evidence and
-[`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) for measurements. No licence file yet; the owner decides.
+[`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) for measurements.
