@@ -126,9 +126,10 @@ func kindType(k Kind) (ColumnType, bool) {
 }
 
 // Fits reports whether a value can be stored in a column of the given type
-// without changing its meaning. Null always fits.
+// without changing its meaning. Null always fits, and so does anything in a
+// string column, written as its exact text (Value.Text).
 func Fits(t ColumnType, v Value) bool {
-	if v.Kind == KindNull {
+	if v.Kind == KindNull || t == TypeString {
 		return true
 	}
 	vt, _ := kindType(v.Kind)

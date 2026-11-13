@@ -21,8 +21,9 @@ type Row struct {
 
 // Flatten converts an event into a row for the given schema (section 6.3 rule 3):
 // a value that does not fit its column becomes NULL, the field is listed in
-// _cdc_cast_errors and the true value survives in _cdc_doc. It returns the
-// conflicting source fields so callers can count them.
+// _cdc_cast_errors and the true value survives in _cdc_doc. A non-string value
+// in a string column is written as its text, not counted as a conflict. It
+// returns the conflicting source fields so callers can count them.
 func Flatten(s Schema, e ChangeEvent, seq, generation int64, ingestedAt time.Time) (Row, []string) {
 	r := Row{
 		Key:        e.Key,
@@ -55,8 +56,11 @@ func Flatten(s Schema, e ChangeEvent, seq, generation int64, ingestedAt time.Tim
 			conflicts = append(conflicts, f.Name)
 			continue
 		}
-		if s.Columns[i].Type == TypeDouble && v.Kind == KindInt {
+		switch vt, _ := kindType(v.Kind); {
+		case s.Columns[i].Type == TypeDouble && v.Kind == KindInt:
 			v = FloatValue(float64(v.Int))
+		case s.Columns[i].Type == TypeString && vt != "" && vt != TypeString:
+			v = StringValue(v.Text()) // e.g. a number in a text column keeps its digits
 		}
 		r.Values[i] = v
 	}

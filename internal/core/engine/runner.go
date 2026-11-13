@@ -598,6 +598,9 @@ func (r *runner) stream(ctx context.Context) error {
 			r.updateLag(ctx, b)
 		case action := <-r.requests:
 			if action == actionResync {
+				// clear it as handleRequest does, or every reconcile asks for another resync
+				empty := ""
+				r.update(ctx, store.CollectionUpdate{RequestedAction: &empty})
 				if err := flush(); err != nil {
 					finish("failed", err.Error())
 					return err

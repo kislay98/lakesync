@@ -88,16 +88,20 @@ func TestFlattenCastErrors(t *testing.T) {
 		{Name: "d", SourceField: "d", Type: TypeDouble},
 		{Name: "b", SourceField: "b", Type: TypeBoolean},
 		{Name: "t", SourceField: "t", Type: TypeTimestampTz},
+		{Name: "phone", SourceField: "phone", Type: TypeString},
 	}}
 	now := time.Now()
 	e := ChangeEvent{Key: `{"$oid":"x"}`, Op: OpInsert, SourceTS: now, Doc: doc(
-		Field{"_id", StringValue("x")}, Field{"n", StringValue("not a number")}, Field{"d", IntValue(3)}, Field{"b", NullValue()}, Field{"t", FloatValue(1)}, Field{"extra", IntValue(9)})}
+		Field{"_id", StringValue("x")}, Field{"n", StringValue("not a number")}, Field{"d", IntValue(3)}, Field{"b", NullValue()}, Field{"t", FloatValue(1)}, Field{"phone", IntValue(2241103377)}, Field{"extra", IntValue(9)})}
 	row, conflicts := Flatten(s, e, 7, 2, now)
 	if row.Seq != 7 || row.Generation != 2 || row.Key != e.Key || row.Doc == "" {
 		t.Fatalf("row metadata wrong: %+v", row)
 	}
 	if !row.Values[1].IsNull() || row.Values[2].Kind != KindFloat || row.Values[2].Float != 3 || !row.Values[3].IsNull() || !row.Values[4].IsNull() {
 		t.Errorf("values: %+v", row.Values)
+	}
+	if row.Values[5].Kind != KindString || row.Values[5].Str != "2241103377" {
+		t.Errorf("number in a string column: %+v", row.Values[5])
 	}
 	if strings.Join(conflicts, ",") != "n,t" || row.CastErrors != `["n","t"]` {
 		t.Errorf("conflicts %v cast_errors %s", conflicts, row.CastErrors)
