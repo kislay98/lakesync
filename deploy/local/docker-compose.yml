@@ -50,7 +50,7 @@ services:
       RUSTFS_SECRET_KEY: ${S3_SECRET_KEY:-lakesync-secret}
       RUSTFS_CONSOLE_ENABLE: "true"
     ports:
-      - "9000:9000"
+      - "${S3_HOST_PORT:-9000}:9000"
       - "9001:9001"
     # RustFS keeps up to 512 descriptors open per disk and logs an error for every
     # failed accept; the Docker default of 1024 ends in HTTP 500s and a runaway log.
