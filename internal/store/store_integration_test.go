@@ -153,6 +153,13 @@ func TestIntegrationStoreRoundTrips(t *testing.T) {
 	if len(m) != 2 || m[0].ConflictCount+m[1].ConflictCount != 4 {
 		t.Fatalf("mappings %+v", m)
 	}
+	if err := st.ResetConflicts(ctx, p.ID, "db.a"); err != nil {
+		t.Fatal(err)
+	}
+	m, _ = st.ListFieldMappings(ctx, p.ID, "db.a")
+	if len(m) != 2 || m[0].ConflictCount+m[1].ConflictCount != 0 || m[0].ColumnName != "x" {
+		t.Fatalf("mappings after reset %+v", m)
+	}
 	// runs, logs, counters
 	runID, _ := st.StartRun(ctx, p.ID, "db.a", "copy")
 	_ = st.FinishRun(ctx, runID, "ok", 10, 100, "", map[string]any{"k": 1})

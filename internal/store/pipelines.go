@@ -325,6 +325,12 @@ ON CONFLICT (pipeline_id, collection, source_field) DO UPDATE SET conflict_count
 	return nil
 }
 
+// ResetConflicts zeroes a collection's conflict counters (a resync counts every document again).
+func (s *Store) ResetConflicts(ctx context.Context, pipelineID, collection string) error {
+	_, err := s.Pool.Exec(ctx, "UPDATE field_mappings SET conflict_count = 0, updated_at = now() WHERE pipeline_id = $1 AND collection = $2 AND conflict_count <> 0", pipelineID, collection)
+	return err
+}
+
 // ListFieldMappings returns the mappings of a collection.
 func (s *Store) ListFieldMappings(ctx context.Context, pipelineID, collection string) ([]FieldMapping, error) {
 	rows, err := s.Pool.Query(ctx, "SELECT pipeline_id, collection, source_field, column_name, iceberg_type, conflict_count, reason, updated_at FROM field_mappings WHERE pipeline_id = $1 AND collection = $2 ORDER BY source_field", pipelineID, collection)

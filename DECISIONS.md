@@ -134,3 +134,8 @@ One entry per decision: date, decision, alternatives, reason. Newest at the bott
 - **Decision:** The stream loop clears `requested_action` as soon as it takes a resync request, the same way `handleRequest` clears every other action, before starting the new generation.
 - **Alternatives:** Clear it after the new generation's copy succeeds (keeps the request if the copy fails, but the reconcile loop re-sends it every 5 seconds during the copy, so a fast copy is followed by another resync).
 - **Reason:** Without the clear, a resync requested on a running collection repeated every reconcile (5 s) indefinitely: one request on 13 Nov took `shop.customers` from generation 2 to 16 in a minute. A copy that fails after the clear resumes from the table checkpoint like any other failure; the user can request the resync again.
+
+## 2026-11-14: A resync resets the collection's conflict counts
+- **Decision:** When a resync starts a new generation (requested, history lost, or tables from an older checkpoint), the runner zeroes that collection's `field_mappings.conflict_count` before the copy; the copy counts every document again.
+- **Alternatives:** Keep counting across generations (each resync added the whole collection's conflicts again, so Table health doubled or kept warnings for values that the new generation stores fine); store counts per generation (more schema for a number the UI shows only for the current table).
+- **Reason:** The counts describe the clean table, which a resync rebuilds from the new generation only. A failed reset only logs a warning and never blocks the resync.

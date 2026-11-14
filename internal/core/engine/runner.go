@@ -332,6 +332,9 @@ func (r *runner) initialize(ctx context.Context, gen int64, reason string) error
 	if resync {
 		r.setState(ctx, store.StateResyncing, "Resyncing from scratch: "+reason)
 		r.update(ctx, store.CollectionUpdate{ResyncReason: &reason})
+		if err := r.w.deps.Store.ResetConflicts(ctx, r.p.ID, r.c.Collection); err != nil {
+			r.log.Warn(ctx, "reset conflict counts", map[string]any{"error": err.Error()})
+		}
 		r.log.Info(ctx, "resync started", map[string]any{"generation": gen, "reason": reason})
 	} else {
 		r.setState(ctx, store.StateCopying, "Preparing the full copy")
